@@ -1,6 +1,18 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
 }
+
+val localConfig = Properties().apply {
+    val configFile = rootProject.file("local.properties")
+    if (configFile.exists()) configFile.reader(Charsets.UTF_8).use { load(it) }
+}
+
+fun analyticsProperty(name: String, fallback: String = ""): String =
+    providers.gradleProperty(name).orNull
+        ?: localConfig.getProperty(name)
+        ?: fallback
 
 android {
     namespace = "com.bettergi.pocket"
@@ -16,6 +28,10 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        // AppKey 为空时不启动统计，可通过 local.properties 或 -P 参数配置。
+        resValue("string", "baidu_mtj_app_key", analyticsProperty("BAIDU_MTJ_APP_KEY"))
+        resValue("string", "baidu_mtj_channel", analyticsProperty("BAIDU_MTJ_CHANNEL", "official"))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -43,12 +59,18 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
+    buildFeatures {
+        resValues = true
+    }
+
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
 }
 
 dependencies {
+    // 官网新版 SDK；Maven Central 的 mtj-sdk 仍是旧版，来源与校验值见 libs/README.md。
+    implementation(files("libs/Baidu_Mtj_android_4.0.11.1.jar"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)

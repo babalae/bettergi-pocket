@@ -37,6 +37,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.widget.ImageViewCompat
 import com.bettergi.pocket.R
+import com.bettergi.pocket.analytics.BaiduAnalytics
 import com.bettergi.pocket.bilibili.BilibiliSpaceOpener
 import com.bettergi.pocket.feature.autopick.AutoPickFeature
 import com.bettergi.pocket.feature.autoskip.AutoSkipEvents
@@ -248,10 +249,12 @@ class OverlayWindowController(
         enabledSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (updatingUi) return@setOnCheckedChangeListener
             settingsRepository.setScreenShareEnabled(isChecked)
+            BaiduAnalytics.event("screen_share_toggle", isChecked.toString())
         }
         autoSkipSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (updatingUi) return@setOnCheckedChangeListener
             settingsRepository.setAutoSkipEnabled(isChecked)
+            BaiduAnalytics.event("auto_skip_toggle", isChecked.toString())
             if (isChecked) {
                 InputAccessibilityService.ensureEnabled(themedContext, "请开启无障碍权限，才能模拟点击对话选项")
             }
@@ -259,10 +262,12 @@ class OverlayWindowController(
         quickSkipSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (updatingUi) return@setOnCheckedChangeListener
             settingsRepository.setQuickSkipDialogueEnabled(isChecked)
+            BaiduAnalytics.event("quick_skip_toggle", isChecked.toString())
         }
         autoPickSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (updatingUi) return@setOnCheckedChangeListener
             settingsRepository.setAutoPickEnabled(isChecked)
+            BaiduAnalytics.event("auto_pick_toggle", isChecked.toString())
             if (isChecked) {
                 InputAccessibilityService.ensureEnabled(themedContext, "请开启无障碍权限，才能模拟点击拾取")
             }
@@ -270,6 +275,7 @@ class OverlayWindowController(
         autoLaunchSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (updatingUi) return@setOnCheckedChangeListener
             settingsRepository.setAutoLaunchGenshinEnabled(isChecked)
+            BaiduAnalytics.event("auto_launch_genshin_toggle", isChecked.toString())
         }
         rootView = root
         params = layoutParams
@@ -349,6 +355,7 @@ class OverlayWindowController(
     }
 
     fun hide() {
+        BaiduAnalytics.pageEnd(BaiduAnalytics.PAGE_OVERLAY_PANEL)
         stopScreenWatch()
         unregisterA11yReceiver()
         mainHandler.removeCallbacks(idleFadeRunnable)
@@ -458,6 +465,11 @@ class OverlayWindowController(
         val panel = panelView ?: return
         val root = rootView ?: return
         expanded = value
+        if (value) {
+            BaiduAnalytics.pageStart(BaiduAnalytics.PAGE_OVERLAY_PANEL)
+        } else {
+            BaiduAnalytics.pageEnd(BaiduAnalytics.PAGE_OVERLAY_PANEL)
+        }
         transforming = true
         if (!value) pendingCollapseOnOutside = false
         bubble.animate().cancel()

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="260dp"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_overlay_log_handle"
@@ -47,5 +48,5 @@
         android:contentDescription="关闭识别日志"
         android:padding="4dp"
         android:src="@drawable/ic_overlay_close"
-        android:tint="@color/overlay_log_green" />
+        app:tint="@color/overlay_log_green" />
 </LinearLayout>

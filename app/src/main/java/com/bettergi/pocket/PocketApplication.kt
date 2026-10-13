@@ -5,6 +5,7 @@ import android.app.Application
 import android.os.Build
 import android.os.Process
 import android.util.Log
+import com.bettergi.pocket.analytics.BaiduAnalytics
 import com.bettergi.pocket.input.InputAccessibilityService
 import com.bettergi.pocket.recognition.ocr.OcrFactory
 import com.bettergi.pocket.recognition.opencv.OpenCvRuntime
@@ -15,6 +16,8 @@ class PocketApplication : Application() {
         super.onCreate()
         InputAccessibilityService.attach(this)
         if (currentProcessName() != packageName) return
+        // 只准备主进程的统计配置；SDK 在用户授权且进入应用后才启动。
+        BaiduAnalytics.prepare(this)
         if (!OpenCvRuntime.ensureLoaded()) {
             Log.e(TAG, "OpenCV initialization failed")
         }

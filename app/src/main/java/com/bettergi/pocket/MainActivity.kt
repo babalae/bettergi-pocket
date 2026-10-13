@@ -11,22 +11,26 @@ import android.widget.Button
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.bettergi.pocket.analytics.BaiduAnalytics
 import com.bettergi.pocket.service.TriggerForegroundService
 
 class MainActivity : AppCompatActivity() {
     private var permissionUiShown = false
+    private var launchReady = false
 
     private val requestPostNotifications =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        launchReady = true
+        BaiduAnalytics.start()
         continueLaunch()
     }
 
     override fun onResume() {
         super.onResume()
-        if (isFinishing) return
+        if (isFinishing || !launchReady) return
         if (Settings.canDrawOverlays(this)) {
             launchOverlayAndExit()
         } else if (!permissionUiShown) {

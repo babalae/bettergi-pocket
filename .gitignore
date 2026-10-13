@@ -15,4 +15,5 @@
 local.properties
 /.idea
 /app/libs/*.jar
+!/app/libs/Baidu_Mtj_android_4.0.11.1.jar
 tmp-opencv-desktop.jar
