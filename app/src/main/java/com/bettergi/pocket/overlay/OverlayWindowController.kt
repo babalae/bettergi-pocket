@@ -115,6 +115,14 @@ class OverlayWindowController(
     private var launchExtras: View? = null
     private var launchChevron: ImageView? = null
     private var launchMenuExpanded = false
+    private var pathingRow: View? = null
+    private var pathingToggle: View? = null
+    private var pathingToggleText: TextView? = null
+    private var pathingExtras: View? = null
+    private var pathingChevron: ImageView? = null
+    private var pathingStatus: TextView? = null
+    private var pathingMenuExpanded = false
+    var onPathingToggle: (() -> Unit)? = null
     private var logHandleView: View? = null
     private var logBodyView: View? = null
     private var logTitle: TextView? = null
@@ -206,6 +214,12 @@ class OverlayWindowController(
         autoSkipChevron = root.findViewById(R.id.overlay_auto_skip_chevron)
         launchExtras = root.findViewById(R.id.overlay_launch_extras)
         launchChevron = root.findViewById(R.id.overlay_launch_chevron)
+        pathingRow = root.findViewById(R.id.overlay_row_pathing)
+        pathingToggle = root.findViewById(R.id.overlay_pathing_toggle)
+        pathingToggleText = root.findViewById(R.id.overlay_pathing_toggle_text)
+        pathingExtras = root.findViewById(R.id.overlay_pathing_extras)
+        pathingChevron = root.findViewById(R.id.overlay_pathing_chevron)
+        pathingStatus = root.findViewById(R.id.overlay_pathing_status)
 
         val layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -239,6 +253,8 @@ class OverlayWindowController(
         logToggle.setOnClickListener { setLogWindowVisible(!logWindowVisible) }
         rowAutoSkip?.setOnClickListener { setAutoSkipMenuExpanded(!autoSkipMenuExpanded) }
         rowLaunch?.setOnClickListener { setLaunchMenuExpanded(!launchMenuExpanded) }
+        pathingRow?.setOnClickListener { setPathingMenuExpanded(!pathingMenuExpanded) }
+        pathingToggle?.setOnClickListener { onPathingToggle?.invoke() }
         root.findViewById<View>(R.id.overlay_launch).setOnClickListener { launchGenshinFromButton() }
         root.findViewById<ImageButton>(R.id.overlay_bilibili).also { button ->
             ImageViewCompat.setImageTintList(button, null)
@@ -283,6 +299,7 @@ class OverlayWindowController(
         setLogWindowVisible(prefs.getBoolean(KEY_LOG_VISIBLE, false), persist = false)
         setAutoSkipMenuExpanded(prefs.getBoolean(KEY_AUTO_SKIP_EXPANDED, false), persist = false)
         setLaunchMenuExpanded(prefs.getBoolean(KEY_LAUNCH_EXPANDED, false), persist = false)
+        setPathingMenuExpanded(prefs.getBoolean(KEY_PATHING_EXPANDED, false), persist = false)
         settingsRepository.addListener(settingsListener)
         startScreenWatch()
         a11yWarningReady = false
@@ -398,6 +415,12 @@ class OverlayWindowController(
         autoSkipChevron = null
         launchExtras = null
         launchChevron = null
+        pathingRow = null
+        pathingToggle = null
+        pathingToggleText = null
+        pathingExtras = null
+        pathingChevron = null
+        pathingStatus = null
     }
 
     private fun collapseOnOutsideTouch() {
@@ -564,6 +587,8 @@ class OverlayWindowController(
         rowAutoSkip?.alpha = if (shareOn) 1f else 0.45f
         rowAutoPick?.alpha = if (shareOn) 1f else 0.45f
         rowQuickSkip?.alpha = if (autoSkipOn) 1f else 0.45f
+        pathingRow?.alpha = if (shareOn) 1f else 0.45f
+        pathingToggle?.isEnabled = shareOn
     }
 
     override fun onTalkHistoryMatched() {
@@ -581,6 +606,28 @@ class OverlayWindowController(
 
     override fun onChatIconClicked(x: Int, y: Int) {
         appendLog("点击对话选项 ($x, $y)")
+    }
+
+    fun log(message: String) {
+        appendLog(message)
+    }
+
+    fun setPathingRunning(running: Boolean) {
+        mainHandler.post {
+            pathingToggleText?.text = if (running) "停止" else "显示"
+            if (running) {
+                setPathingMenuExpanded(true)
+                if (!logWindowVisible) {
+                    setLogWindowVisible(true)
+                }
+            }
+        }
+    }
+
+    fun setPathingStatus(text: String) {
+        mainHandler.post {
+            pathingStatus?.text = text
+        }
     }
 
     private fun appendLog(message: String) {
@@ -626,6 +673,15 @@ class OverlayWindowController(
         }
         autoSkipExtras?.visibility = if (expanded) View.VISIBLE else View.GONE
         autoSkipChevron?.animate()?.rotation(if (expanded) 90f else 0f)?.setDuration(160)?.start()
+    }
+
+    private fun setPathingMenuExpanded(expanded: Boolean, persist: Boolean = true) {
+        pathingMenuExpanded = expanded
+        if (persist) {
+            prefs.edit().putBoolean(KEY_PATHING_EXPANDED, expanded).apply()
+        }
+        pathingExtras?.visibility = if (expanded) View.VISIBLE else View.GONE
+        pathingChevron?.animate()?.rotation(if (expanded) 90f else 0f)?.setDuration(160)?.start()
     }
 
     private fun setLaunchMenuExpanded(expanded: Boolean, persist: Boolean = true) {
@@ -1119,6 +1175,7 @@ class OverlayWindowController(
         private const val KEY_LOG_VISIBLE = "log_visible"
         private const val KEY_AUTO_SKIP_EXPANDED = "auto_skip_expanded"
         private const val KEY_LAUNCH_EXPANDED = "launch_expanded"
+        private const val KEY_PATHING_EXPANDED = "pathing_expanded"
         private const val LOG_WIDTH_DP = 260
         private const val LOG_DEFAULT_HEIGHT_DP = 148
         private const val IDLE_ALPHA = 0.62f

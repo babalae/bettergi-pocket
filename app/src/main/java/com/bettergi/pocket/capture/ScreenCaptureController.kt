@@ -17,6 +17,7 @@ import android.util.Log
 import android.view.Display
 import android.view.WindowManager
 import com.bettergi.pocket.recognition.opencv.MatOps
+import kotlin.math.min
 
 private data class DisplaySpec(
     val width: Int,
@@ -43,6 +44,7 @@ class ScreenCaptureController(
     private var lastFrameElapsedMs = 0L
     private var lastRecoverElapsedMs = 0L
     private var displayCreatedElapsedMs = 0L
+    private var frameSequence = 0L
 
     fun isRunning(): Boolean = synchronized(lock) {
         mediaProjection != null && virtualDisplay != null && imageReader != null
@@ -124,10 +126,13 @@ class ScreenCaptureController(
                 cachedHeight = height
                 hasCachedFrame = true
                 lastFrameElapsedMs = SystemClock.elapsedRealtime()
+                val bgr = MatOps.rgbaToBgr(width, height, packed)
+                frameSequence += 1
                 return CapturedBgrFrame(
                     width = width,
                     height = height,
-                    bgr = MatOps.rgbaToBgr(width, height, packed),
+                    bgr = bgr,
+                    sequence = frameSequence,
                 )
             } finally {
                 image.close()
@@ -143,7 +148,32 @@ class ScreenCaptureController(
             width = cachedWidth,
             height = cachedHeight,
             bgr = MatOps.rgbaToBgr(cachedWidth, cachedHeight, rgbaScratch),
+            sequence = frameSequence,
         )
+    }
+
+    /**
+     * 取一张比 [afterSequence] 更新的画面。没有新帧时等待，最多 [timeoutMs]。
+     * 超时或线程被中断时返回 null；中断会重新置上，供调用方取消任务。
+     * 返回的 Mat 由调用方释放。等待期间拿到的旧帧会在这里释放。
+     */
+    fun acquireNewerBgr(afterSequence: Long, timeoutMs: Long): CapturedBgrFrame? {
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs.coerceAtLeast(0L)
+        while (true) {
+            val frame = acquireLatestBgr()
+            if (frame != null && frame.sequence > afterSequence) {
+                return frame
+            }
+            frame?.bgr?.release()
+            val now = SystemClock.elapsedRealtime()
+            if (now >= deadline) return null
+            try {
+                Thread.sleep(min(POLL_INTERVAL_MS, deadline - now))
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return null
+            }
+        }
     }
 
     private fun handleProjectionStoppedExternally() {
@@ -275,6 +305,7 @@ class ScreenCaptureController(
         lastFrameElapsedMs = 0L
         lastRecoverElapsedMs = 0L
         displayCreatedElapsedMs = 0L
+        frameSequence = 0L
     }
 
     private fun rgbaScratch(size: Int): ByteArray {
@@ -310,5 +341,6 @@ class ScreenCaptureController(
         const val CACHE_MAX_AGE_MS = 2500L
         const val RECOVER_AFTER_MS = 800L
         const val RECOVER_COOLDOWN_MS = 2500L
+        const val POLL_INTERVAL_MS = 16L
     }
 }

@@ -9,4 +9,9 @@ class CapturedBgrFrame(
     val width: Int,
     val height: Int,
     val bgr: Mat,
+    /**
+     * 本次屏幕共享会话内的帧序号，从 1 递增。
+     * 复用缓存画面时序号不变，地图追踪据此丢掉旧帧。
+     */
+    val sequence: Long,
 )

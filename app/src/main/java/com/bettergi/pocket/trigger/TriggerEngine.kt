@@ -7,6 +7,7 @@ import com.bettergi.pocket.capture.ScreenCaptureController
 import com.bettergi.pocket.input.ActionEmitter
 import com.bettergi.pocket.input.AutomationAction
 import com.bettergi.pocket.input.AutomationController
+import com.bettergi.pocket.pathing.TaskGate
 import com.bettergi.pocket.recognition.CaptureContent
 import com.bettergi.pocket.settings.TriggerSettingsRepository
 
@@ -41,6 +42,12 @@ class TriggerEngine(
     private val tickRunnable = object : Runnable {
         override fun run() {
             if (!running) return
+
+            // 地图追踪独占取帧。不取图、不丢帧，等它结束后再继续实时任务。
+            if (TaskGate.exclusiveRunning) {
+                handler.postDelayed(this, WAIT_CAPTURE_MS)
+                return
+            }
 
             val settings = settingsRepository.get()
             if (!settings.screenShareEnabled) {

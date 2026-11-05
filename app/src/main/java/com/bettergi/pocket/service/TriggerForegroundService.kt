@@ -21,6 +21,10 @@ import com.bettergi.pocket.genshin.GenshinLauncher
 import com.bettergi.pocket.input.AccessibilityAutomationController
 import com.bettergi.pocket.input.InputAccessibilityService
 import com.bettergi.pocket.overlay.OverlayWindowController
+import com.bettergi.pocket.pathing.PathingController
+import com.bettergi.pocket.pathing.PathingLayout
+import com.bettergi.pocket.pathing.executor.ScreenCaptureFrameSource
+import com.bettergi.pocket.pathing.map.MapManager
 import com.bettergi.pocket.recognition.RecognitionAssets
 import com.bettergi.pocket.settings.TriggerSettings
 import com.bettergi.pocket.settings.TriggerSettingsRepository
@@ -33,6 +37,7 @@ class TriggerForegroundService : Service() {
     private lateinit var genshinLauncher: GenshinLauncher
     private lateinit var genshinLaunchMonitor: GenshinLaunchMonitor
     private lateinit var engine: TriggerEngine
+    private lateinit var pathingController: PathingController
 
     @Volatile
     private var requestingCapturePermission = false
@@ -92,6 +97,18 @@ class TriggerForegroundService : Service() {
             ),
             actionController = AccessibilityAutomationController(overlayController),
         )
+        pathingController = PathingController(
+            frames = ScreenCaptureFrameSource(captureController),
+            loadLayout = {
+                val assets = MapManager.assets ?: error("地图资源未初始化")
+                PathingLayout.load(assets)
+            },
+            genshinInForeground = { InputAccessibilityService.isGenshinInForeground() },
+            log = { message -> overlayController.log(message) },
+            onReadoutChanged = { running -> overlayController.setPathingRunning(running) },
+            onStatus = { text -> overlayController.setPathingStatus(text) },
+        )
+        overlayController.onPathingToggle = { pathingController.toggleReadout() }
         settingsRepository.addListener(settingsListener)
         genshinLaunchMonitor.start()
     }
@@ -152,6 +169,9 @@ class TriggerForegroundService : Service() {
         shutDown = true
         InputAccessibilityService.cancelRecoverCheck()
         genshinLaunchMonitor.stop()
+        if (::pathingController.isInitialized) {
+            pathingController.stop()
+        }
         engine.release()
         captureController.stop()
         overlayController.hide()
@@ -160,6 +180,9 @@ class TriggerForegroundService : Service() {
 
     private fun stopScreenShare() {
         requestingCapturePermission = false
+        if (::pathingController.isInitialized) {
+            pathingController.stop()
+        }
         engine.stop()
         captureController.stop()
         if (!shutDown) {
