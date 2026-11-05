@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    对拍基准生成器：直接调用 BetterGI 编译产物里的视角与地图匹配实现，
+    输出 Pocket JVM 单测用的输入图和期望值（app/src/test/resources/pathing/golden）。
+    用法见 tools/bgi-golden/README.md。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <BgiBin Condition="'$(BgiBin)' == ''">E:\HuiPrograming\MainProject\better-genshin-impact\BetterGenshinImpact\bin\Debug\net10.0-windows10.0.22621.0</BgiBin>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- BetterGI 运行时依赖 ASP.NET Core 共享框架（Microsoft.Extensions.*） -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Reference Include="BetterGI">
+      <HintPath>$(BgiBin)\BetterGI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="OpenCvSharp">
+      <HintPath>$(BgiBin)\OpenCvSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

@@ -18,3 +18,8 @@ local.properties
 !/app/libs/Baidu_Mtj_android_4.0.11.1.jar
 tmp-opencv-desktop.jar
 /app/release
+# 地图追踪资源由 tools/sync-pathing-assets.ps1 从 BetterGI 编译目录复制（约 185 MiB），不进 git
+/app/src/main/assets/pathing/Map/
+/app/src/main/assets/pathing/tp.json
+/tools/bgi-golden/bin/
+/tools/bgi-golden/obj/

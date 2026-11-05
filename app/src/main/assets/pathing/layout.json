@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "comment": "地图追踪手机 UI 标定数据，待通过 adb 截图标定。referenceSize 为标定截图尺寸；miniMap.bbox 为小地图外接正方形，边长 = 手机小地图圆直径 × 212 / PC 1080p 小地图圆直径，中心为圆心，格式 rect(x, y, w, h)。",
+  "referenceSize": null,
+  "miniMap": null
+}

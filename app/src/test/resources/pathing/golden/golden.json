@@ -1,0 +1,1061 @@
+{
+  "source": "BetterGI E:\\HuiPrograming\\MainProject\\better-genshin-impact\\BetterGenshinImpact\\bin\\Debug\\net10.0-windows10.0.22621.0",
+  "generatedAt": "2026-11-05 12:49:04",
+  "miniMaps": [
+    {
+      "file": "mm_00.png",
+      "source": "AutoFight\\联机满编\\别人进我世界_2人.png",
+      "rotation": {
+        "angle": 163.5,
+        "confidence": 0.6732664
+      },
+      "cameraOrientation": 163.5,
+      "gia": 162,
+      "templateGlobal": {
+        "x": 14579.215,
+        "y": 28280.496,
+        "mapX": 9094.393,
+        "mapY": -1852.2482,
+        "confidence": 0.9977538624728498,
+        "layer": "LayeredMap_3440101"
+      },
+      "templateLocal": {
+        "x": 14579.215,
+        "y": 28280.496,
+        "mapX": 9094.393,
+        "mapY": -1852.2482,
+        "confidence": 0.9977538624728498,
+        "layer": "LayeredMap_3440101"
+      },
+      "templateLocalOffsetPrev": [
+        14619.215,
+        28250.496
+      ],
+      "templateLocalOffset": {
+        "x": 14579.215,
+        "y": 28280.496,
+        "mapX": 9094.393,
+        "mapY": -1852.2482,
+        "confidence": 0.9977538624728498,
+        "layer": "LayeredMap_3440101"
+      },
+      "siftLocal": null,
+      "siftGlobal": null
+    },
+    {
+      "file": "mm_01.png",
+      "source": "AutoFight\\联机满编\\别人进我世界_3人.png",
+      "rotation": {
+        "angle": 247,
+        "confidence": 0.70289063
+      },
+      "cameraOrientation": 247,
+      "gia": 351,
+      "templateGlobal": {
+        "x": 14689.781,
+        "y": 29432.43,
+        "mapX": 9039.109,
+        "mapY": -2428.2144,
+        "confidence": 0.9989884870840542,
+        "layer": "MapBack_0"
+      },
+      "templateLocal": {
+        "x": 14689.781,
+        "y": 29432.43,
+        "mapX": 9039.109,
+        "mapY": -2428.2144,
+        "confidence": 0.9989884870840542,
+        "layer": "MapBack_0"
+      },
+      "templateLocalOffsetPrev": [
+        14729.781,
+        29402.43
+      ],
+      "templateLocalOffset": {
+        "x": 14689.781,
+        "y": 29432.43,
+        "mapX": 9039.109,
+        "mapY": -2428.2144,
+        "confidence": 0.9989884870840542,
+        "layer": "MapBack_0"
+      },
+      "siftLocal": [
+        14690.3,
+        29433.04
+      ],
+      "siftGlobal": [
+        14690.493,
+        29433.084
+      ]
+    },
+    {
+      "file": "mm_02.png",
+      "source": "AutoFight\\联机满编\\别人进我世界_4人.png",
+      "rotation": {
+        "angle": 238.5,
+        "confidence": 0.74081147
+      },
+      "cameraOrientation": 238.5,
+      "gia": 239,
+      "templateGlobal": {
+        "x": 14683.002,
+        "y": 29420.652,
+        "mapX": 9042.499,
+        "mapY": -2422.3267,
+        "confidence": 0.9970871859975926,
+        "layer": "MapBack_0"
+      },
+      "templateLocal": {
+        "x": 14683.002,
+        "y": 29420.652,
+        "mapX": 9042.499,
+        "mapY": -2422.3267,
+        "confidence": 0.9970871859975926,
+        "layer": "MapBack_0"
+      },
+      "templateLocalOffsetPrev": [
+        14723.002,
+        29390.652
+      ],
+      "templateLocalOffset": {
+        "x": 14683.002,
+        "y": 29420.652,
+        "mapX": 9042.499,
+        "mapY": -2422.3267,
+        "confidence": 0.9970871859975926,
+        "layer": "MapBack_0"
+      },
+      "siftLocal": [
+        14683.524,
+        29421.229
+      ],
+      "siftGlobal": [
+        14683.516,
+        29421.205
+      ]
+    },
+    {
+      "file": "mm_03.png",
+      "source": "AutoFight\\联机满编\\别人进我世界_4人_2.png",
+      "rotation": {
+        "angle": 342,
+        "confidence": 0.7143981
+      },
+      "cameraOrientation": 342,
+      "gia": 341,
+      "templateGlobal": {
+        "x": 19747.926,
+        "y": 8619.682,
+        "mapX": 6510.0366,
+        "mapY": 7978.159,
+        "confidence": 0.982648622605991,
+        "layer": "City_570"
+      },
+      "templateLocal": {
+        "x": 19747.926,
+        "y": 8619.682,
+        "mapX": 6510.0366,
+        "mapY": 7978.159,
+        "confidence": 0.982648622605991,
+        "layer": "City_570"
+      },
+      "templateLocalOffsetPrev": [
+        19787.926,
+        8589.682
+      ],
+      "templateLocalOffset": {
+        "x": 19747.926,
+        "y": 8619.682,
+        "mapX": 6510.0366,
+        "mapY": 7978.159,
+        "confidence": 0.982648622605991,
+        "layer": "City_570"
+      },
+      "siftLocal": null
+    },
+    {
+      "file": "mm_04.png",
+      "source": "AutoFight\\联机满编\\我进别人世界_2人.png",
+      "rotation": {
+        "angle": 37.5,
+        "confidence": 0.5780908
+      },
+      "cameraOrientation": 37.5,
+      "gia": 37,
+      "templateGlobal": {
+        "x": 27237.512,
+        "y": 25466.668,
+        "mapX": 2765.244,
+        "mapY": -445.33398,
+        "confidence": 0.9955925079981138,
+        "layer": "City_2402"
+      },
+      "templateLocal": {
+        "x": 27237.512,
+        "y": 25466.668,
+        "mapX": 2765.244,
+        "mapY": -445.33398,
+        "confidence": 0.9955925079981138,
+        "layer": "City_2402"
+      },
+      "templateLocalOffsetPrev": [
+        27277.512,
+        25436.668
+      ],
+      "templateLocalOffset": {
+        "x": 27237.512,
+        "y": 25466.668,
+        "mapX": 2765.244,
+        "mapY": -445.33398,
+        "confidence": 0.9955925079981138,
+        "layer": "City_2402"
+      },
+      "siftLocal": [
+        27237.568,
+        25466.68
+      ]
+    },
+    {
+      "file": "mm_05.png",
+      "source": "AutoFight\\联机满编\\我进别人世界_3人.png",
+      "rotation": {
+        "angle": 259.5,
+        "confidence": 0.6206253
+      },
+      "cameraOrientation": 259.5,
+      "gia": 261,
+      "templateGlobal": {
+        "x": 14685.932,
+        "y": 29428.578,
+        "mapX": 9041.034,
+        "mapY": -2426.2893,
+        "confidence": 0.9975507882600264,
+        "layer": "MapBack_0"
+      },
+      "templateLocal": {
+        "x": 14685.932,
+        "y": 29428.578,
+        "mapX": 9041.034,
+        "mapY": -2426.2893,
+        "confidence": 0.9975507882600264,
+        "layer": "MapBack_0"
+      },
+      "templateLocalOffsetPrev": [
+        14725.932,
+        29398.578
+      ],
+      "templateLocalOffset": {
+        "x": 14685.932,
+        "y": 29428.578,
+        "mapX": 9041.034,
+        "mapY": -2426.2893,
+        "confidence": 0.9975507882600264,
+        "layer": "MapBack_0"
+      },
+      "siftLocal": [
+        14686.657,
+        29428.977
+      ]
+    },
+    {
+      "file": "mm_06.png",
+      "source": "AutoFight\\联机满编\\我进别人世界_4人.png",
+      "rotation": {
+        "angle": 44.5,
+        "confidence": 0.5895859
+      },
+      "cameraOrientation": 44.5,
+      "gia": 46,
+      "templateGlobal": {
+        "x": 27328.16,
+        "y": 25483.637,
+        "mapX": 2719.9204,
+        "mapY": -453.81885,
+        "confidence": 0.9919463968815524,
+        "layer": "City_2402"
+      },
+      "templateLocal": {
+        "x": 27328.16,
+        "y": 25483.637,
+        "mapX": 2719.9204,
+        "mapY": -453.81885,
+        "confidence": 0.9919463968815524,
+        "layer": "City_2402"
+      },
+      "templateLocalOffsetPrev": [
+        27368.16,
+        25453.637
+      ],
+      "templateLocalOffset": {
+        "x": 27328.16,
+        "y": 25483.637,
+        "mapX": 2719.9204,
+        "mapY": -453.81885,
+        "confidence": 0.9919463968815524,
+        "layer": "City_2402"
+      },
+      "siftLocal": [
+        27328.127,
+        25483.693
+      ]
+    },
+    {
+      "file": "mm_07.png",
+      "source": "AutoFishing\\20250225101257889_GetFishpond_Succeeded.png",
+      "rotation": {
+        "angle": 267,
+        "confidence": 0.7802697
+      },
+      "cameraOrientation": 267,
+      "gia": 267,
+      "templateGlobal": {
+        "x": 34370.395,
+        "y": 20488.748,
+        "mapX": -801.19727,
+        "mapY": 2043.6262,
+        "confidence": 0.9984480848877506,
+        "layer": "MapBack_2"
+      },
+      "templateLocal": {
+        "x": 34370.395,
+        "y": 20488.748,
+        "mapX": -801.19727,
+        "mapY": 2043.6262,
+        "confidence": 0.9984480848877506,
+        "layer": "MapBack_2"
+      },
+      "templateLocalOffsetPrev": [
+        34410.395,
+        20458.748
+      ],
+      "templateLocalOffset": {
+        "x": 34370.395,
+        "y": 20488.748,
+        "mapX": -801.19727,
+        "mapY": 2043.6262,
+        "confidence": 0.9984480848877506,
+        "layer": "MapBack_2"
+      },
+      "siftLocal": [
+        34370.965,
+        20489.418
+      ]
+    },
+    {
+      "file": "mm_08.png",
+      "source": "AutoFishing\\20250225101304534_ThrowRod_Succeeded.png",
+      "rotation": {
+        "angle": 270,
+        "confidence": 0.77884907
+      },
+      "cameraOrientation": 270,
+      "gia": 270,
+      "templateGlobal": {
+        "x": 34370.38,
+        "y": 20488.742,
+        "mapX": -801.1897,
+        "mapY": 2043.6289,
+        "confidence": 0.9985301471243777,
+        "layer": "MapBack_2"
+      },
+      "templateLocal": {
+        "x": 34370.38,
+        "y": 20488.742,
+        "mapX": -801.1897,
+        "mapY": 2043.6289,
+        "confidence": 0.9985301471243777,
+        "layer": "MapBack_2"
+      },
+      "templateLocalOffsetPrev": [
+        34410.38,
+        20458.742
+      ],
+      "templateLocalOffset": {
+        "x": 34370.38,
+        "y": 20488.742,
+        "mapX": -801.1897,
+        "mapY": 2043.6289,
+        "confidence": 0.9985301471243777,
+        "layer": "MapBack_2"
+      },
+      "siftLocal": [
+        34371.05,
+        20489.248
+      ]
+    },
+    {
+      "file": "mm_09.png",
+      "source": "AutoFishing\\202502252350206390.png",
+      "rotation": {
+        "angle": 46,
+        "confidence": 0.65030015
+      },
+      "cameraOrientation": 46,
+      "gia": 46,
+      "templateGlobal": {
+        "x": 15437.787,
+        "y": 30210.395,
+        "mapX": 8665.106,
+        "mapY": -2817.197,
+        "confidence": 0.9988280699789991,
+        "layer": "LayeredMap_3430602"
+      },
+      "templateLocal": {
+        "x": 15437.787,
+        "y": 30210.395,
+        "mapX": 8665.106,
+        "mapY": -2817.197,
+        "confidence": 0.9988280699789991,
+        "layer": "LayeredMap_3430602"
+      },
+      "templateLocalOffsetPrev": [
+        15477.787,
+        30180.395
+      ],
+      "templateLocalOffset": {
+        "x": 15437.787,
+        "y": 30210.395,
+        "mapX": 8665.106,
+        "mapY": -2817.197,
+        "confidence": 0.9988280699789991,
+        "layer": "LayeredMap_3430602"
+      },
+      "siftLocal": null
+    },
+    {
+      "file": "mm_10.png",
+      "source": "AutoFishing\\20250226162217468_ThrowRod_Succeeded.png",
+      "rotation": {
+        "angle": 141.5,
+        "confidence": 0.70966095
+      },
+      "cameraOrientation": 141.5,
+      "gia": 141,
+      "templateGlobal": {
+        "x": 34401.133,
+        "y": 31848.34,
+        "mapX": -816.5663,
+        "mapY": -3636.1702,
+        "confidence": 0.9982909181344961,
+        "layer": "MapBack_3"
+      },
+      "templateLocal": {
+        "x": 34401.133,
+        "y": 31848.34,
+        "mapX": -816.5663,
+        "mapY": -3636.1702,
+        "confidence": 0.9982909181344961,
+        "layer": "MapBack_3"
+      },
+      "templateLocalOffsetPrev": [
+        34441.133,
+        31818.34
+      ],
+      "templateLocalOffset": {
+        "x": 34401.133,
+        "y": 31848.34,
+        "mapX": -816.5663,
+        "mapY": -3636.1702,
+        "confidence": 0.9982909181344961,
+        "layer": "MapBack_3"
+      },
+      "siftLocal": [
+        34401.594,
+        31848.96
+      ]
+    },
+    {
+      "file": "mm_11.png",
+      "source": "AutoFishing\\20250301234659009_GetFishpond_Succeeded.png",
+      "rotation": {
+        "angle": 41,
+        "confidence": 0.85629255
+      },
+      "cameraOrientation": 41,
+      "gia": 39,
+      "templateGlobal": {
+        "x": 23519.816,
+        "y": 19094.445,
+        "mapX": 4624.092,
+        "mapY": 2740.7776,
+        "confidence": 0.9986213246368317,
+        "layer": "MapBack_1"
+      },
+      "templateLocal": {
+        "x": 23519.816,
+        "y": 19094.445,
+        "mapX": 4624.092,
+        "mapY": 2740.7776,
+        "confidence": 0.9986213246368317,
+        "layer": "MapBack_1"
+      },
+      "templateLocalOffsetPrev": [
+        23559.816,
+        19064.445
+      ],
+      "templateLocalOffset": {
+        "x": 23519.816,
+        "y": 19094.445,
+        "mapX": 4624.092,
+        "mapY": 2740.7776,
+        "confidence": 0.9986213246368317,
+        "layer": "MapBack_1"
+      },
+      "siftLocal": [
+        23520.482,
+        19094.084
+      ]
+    },
+    {
+      "file": "mm_12.png",
+      "source": "AutoFishing\\20250302001049589_GetFishpond_Succeeded.png",
+      "rotation": {
+        "angle": 47.000008,
+        "confidence": 0.850594
+      },
+      "cameraOrientation": 47.000008,
+      "gia": 46,
+      "templateGlobal": {
+        "x": 23521.367,
+        "y": 19092.125,
+        "mapX": 4623.316,
+        "mapY": 2741.937,
+        "confidence": 0.9985059704681886,
+        "layer": "MapBack_1"
+      },
+      "templateLocal": {
+        "x": 23521.367,
+        "y": 19092.125,
+        "mapX": 4623.316,
+        "mapY": 2741.937,
+        "confidence": 0.9985059704681886,
+        "layer": "MapBack_1"
+      },
+      "templateLocalOffsetPrev": [
+        23561.367,
+        19062.125
+      ],
+      "templateLocalOffset": {
+        "x": 23521.367,
+        "y": 19092.125,
+        "mapX": 4623.316,
+        "mapY": 2741.937,
+        "confidence": 0.9985059704681886,
+        "layer": "MapBack_1"
+      },
+      "siftLocal": [
+        23522.848,
+        19091.504
+      ]
+    },
+    {
+      "file": "mm_13.png",
+      "source": "AutoFishing\\20250306111752053_FishBite_Succeeded.png",
+      "rotation": {
+        "angle": 359.5,
+        "confidence": 0.7684796
+      },
+      "cameraOrientation": 359.5,
+      "gia": 359,
+      "templateGlobal": {
+        "x": 33251.22,
+        "y": 21164.475,
+        "mapX": -241.60864,
+        "mapY": 1705.7625,
+        "confidence": 0.9988520693225004,
+        "layer": "MapBack_2"
+      },
+      "templateLocal": {
+        "x": 33251.22,
+        "y": 21164.475,
+        "mapX": -241.60864,
+        "mapY": 1705.7625,
+        "confidence": 0.9988520693225004,
+        "layer": "MapBack_2"
+      },
+      "templateLocalOffsetPrev": [
+        33291.22,
+        21134.475
+      ],
+      "templateLocalOffset": {
+        "x": 33251.22,
+        "y": 21164.475,
+        "mapX": -241.60864,
+        "mapY": 1705.7625,
+        "confidence": 0.9988520693225004,
+        "layer": "MapBack_2"
+      },
+      "siftLocal": [
+        33251.95,
+        21165.178
+      ]
+    },
+    {
+      "file": "mm_14.png",
+      "source": "AutoFishing\\20250306165029475_GetFishpond_Succeeded.png",
+      "rotation": {
+        "angle": 183.5,
+        "confidence": 0.682081
+      },
+      "cameraOrientation": 183.5,
+      "gia": 183,
+      "templateGlobal": {
+        "x": 29602.686,
+        "y": 22289.08,
+        "mapX": 1582.6575,
+        "mapY": 1143.46,
+        "confidence": 0.9971122592251345,
+        "layer": "MapBack_2"
+      },
+      "templateLocal": {
+        "x": 29602.686,
+        "y": 22289.08,
+        "mapX": 1582.6575,
+        "mapY": 1143.46,
+        "confidence": 0.9971122592251345,
+        "layer": "MapBack_2"
+      },
+      "templateLocalOffsetPrev": [
+        29642.686,
+        22259.08
+      ],
+      "templateLocalOffset": {
+        "x": 29602.686,
+        "y": 22289.08,
+        "mapX": 1582.6575,
+        "mapY": 1143.46,
+        "confidence": 0.9971122592251345,
+        "layer": "MapBack_2"
+      },
+      "siftLocal": [
+        29603.21,
+        22289.645
+      ]
+    },
+    {
+      "file": "mm_15.png",
+      "source": "AutoFishing\\202503082114541115.png",
+      "rotation": {
+        "angle": 36.5,
+        "confidence": 0.87312496
+      },
+      "cameraOrientation": 36.5,
+      "gia": 36,
+      "templateGlobal": {
+        "x": 15810,
+        "y": 7326,
+        "mapX": 8479,
+        "mapY": 8625,
+        "confidence": 0.9981384208635649,
+        "layer": "LayeredMap_19_-1"
+      },
+      "templateLocal": {
+        "x": 15810,
+        "y": 7326,
+        "mapX": 8479,
+        "mapY": 8625,
+        "confidence": 0.9981384208635649,
+        "layer": "LayeredMap_19_-1"
+      },
+      "templateLocalOffsetPrev": [
+        15850,
+        7296
+      ],
+      "templateLocalOffset": {
+        "x": 15810,
+        "y": 7326,
+        "mapX": 8479,
+        "mapY": 8625,
+        "confidence": 0.9981384208635649,
+        "layer": "LayeredMap_19_-1"
+      },
+      "siftLocal": null
+    },
+    {
+      "file": "mm_16.png",
+      "source": "AutoFishing\\20250313-0442-39.4967763.mp4_20250313_132441.664.png",
+      "rotation": {
+        "angle": 9.5,
+        "confidence": 0.74289936
+      },
+      "cameraOrientation": 9.5,
+      "gia": 8,
+      "templateGlobal": {
+        "x": 35296.043,
+        "y": 20866.8,
+        "mapX": -1264.0217,
+        "mapY": 1854.6001,
+        "confidence": 0.998722420597137,
+        "layer": "MapBack_2"
+      },
+      "templateLocal": {
+        "x": 35296.043,
+        "y": 20866.8,
+        "mapX": -1264.0217,
+        "mapY": 1854.6001,
+        "confidence": 0.998722420597137,
+        "layer": "MapBack_2"
+      },
+      "templateLocalOffsetPrev": [
+        35336.043,
+        20836.8
+      ],
+      "templateLocalOffset": {
+        "x": 35296.043,
+        "y": 20866.8,
+        "mapX": -1264.0217,
+        "mapY": 1854.6001,
+        "confidence": 0.998722420597137,
+        "layer": "MapBack_2"
+      },
+      "siftLocal": [
+        35296.43,
+        20867.21
+      ]
+    },
+    {
+      "file": "mm_17.png",
+      "source": "AutoFishing\\20250314002439020_Fishing_Succeeded.png",
+      "rotation": {
+        "angle": 99.5,
+        "confidence": 0.81460047
+      },
+      "cameraOrientation": 99.5,
+      "gia": 98,
+      "templateGlobal": {
+        "x": 40031.2,
+        "y": 31716.766,
+        "mapX": -3631.5994,
+        "mapY": -3570.3833,
+        "confidence": 0.9997654801742938,
+        "layer": "MapBack_3"
+      },
+      "templateLocal": {
+        "x": 40031.2,
+        "y": 31716.766,
+        "mapX": -3631.5994,
+        "mapY": -3570.3833,
+        "confidence": 0.9997654801742938,
+        "layer": "MapBack_3"
+      },
+      "templateLocalOffsetPrev": [
+        40071.2,
+        31686.766
+      ],
+      "templateLocalOffset": {
+        "x": 40031.2,
+        "y": 31716.766,
+        "mapX": -3631.5994,
+        "mapY": -3570.3833,
+        "confidence": 0.9997654801742938,
+        "layer": "MapBack_3"
+      },
+      "siftLocal": null
+    },
+    {
+      "file": "mm_18.png",
+      "source": "AutoFishing\\202503140845524752.png",
+      "rotation": {
+        "angle": 119.5,
+        "confidence": 0.8434134
+      },
+      "cameraOrientation": 119.5,
+      "gia": 120,
+      "templateGlobal": {
+        "x": 13322.465,
+        "y": 26353.953,
+        "mapX": 9722.768,
+        "mapY": -888.9763,
+        "confidence": 0.9992729176101176,
+        "layer": "MapBack_0"
+      },
+      "templateLocal": {
+        "x": 13322.465,
+        "y": 26353.953,
+        "mapX": 9722.768,
+        "mapY": -888.9763,
+        "confidence": 0.9992729176101176,
+        "layer": "MapBack_0"
+      },
+      "templateLocalOffsetPrev": [
+        13362.465,
+        26323.953
+      ],
+      "templateLocalOffset": {
+        "x": 13322.465,
+        "y": 26353.953,
+        "mapX": 9722.768,
+        "mapY": -888.9763,
+        "confidence": 0.9992729176101176,
+        "layer": "MapBack_0"
+      },
+      "siftLocal": [
+        13323.079,
+        26354.451
+      ]
+    },
+    {
+      "file": "mm_19.png",
+      "source": "AutoFishing\\20250314112457916_Fishing_Running.png",
+      "rotation": {
+        "angle": 95.5,
+        "confidence": 0.88030136
+      },
+      "cameraOrientation": 95.5,
+      "gia": 96,
+      "templateGlobal": {
+        "x": 13320.918,
+        "y": 26354.275,
+        "mapX": 9723.541,
+        "mapY": -889.1377,
+        "confidence": 0.9990104488095269,
+        "layer": "MapBack_0"
+      },
+      "templateLocal": {
+        "x": 13320.918,
+        "y": 26354.275,
+        "mapX": 9723.541,
+        "mapY": -889.1377,
+        "confidence": 0.9990104488095269,
+        "layer": "MapBack_0"
+      },
+      "templateLocalOffsetPrev": [
+        13360.918,
+        26324.275
+      ],
+      "templateLocalOffset": {
+        "x": 13320.918,
+        "y": 26354.275,
+        "mapX": 9723.541,
+        "mapY": -889.1377,
+        "confidence": 0.9990104488095269,
+        "layer": "MapBack_0"
+      },
+      "siftLocal": [
+        13321.425,
+        26354.85
+      ]
+    },
+    {
+      "file": "mm_20.png",
+      "source": "AutoFishing\\20250314164703100_FishBite_Succeeded_FP.png",
+      "rotation": {
+        "angle": 318,
+        "confidence": 0.79958004
+      },
+      "cameraOrientation": 318,
+      "gia": 318,
+      "templateGlobal": {
+        "x": 40887.11,
+        "y": 33461.61,
+        "mapX": -4059.5547,
+        "mapY": -4442.8037,
+        "confidence": 0.9987654688656409,
+        "layer": "MapBack_3"
+      },
+      "templateLocal": {
+        "x": 40887.11,
+        "y": 33461.61,
+        "mapX": -4059.5547,
+        "mapY": -4442.8037,
+        "confidence": 0.9987654688656409,
+        "layer": "MapBack_3"
+      },
+      "templateLocalOffsetPrev": [
+        40927.11,
+        33431.61
+      ],
+      "templateLocalOffset": {
+        "x": 40887.11,
+        "y": 33461.61,
+        "mapX": -4059.5547,
+        "mapY": -4442.8037,
+        "confidence": 0.9987654688656409,
+        "layer": "MapBack_3"
+      },
+      "siftLocal": [
+        40887.9,
+        33462.086
+      ]
+    },
+    {
+      "file": "mm_21.png",
+      "source": "AutoFishing\\202503230049406101_en.png",
+      "rotation": {
+        "angle": 81.50001,
+        "confidence": 0.8698366
+      },
+      "cameraOrientation": 81.50001,
+      "gia": 81,
+      "templateGlobal": {
+        "x": 32650.215,
+        "y": 23279.404,
+        "mapX": 58.893066,
+        "mapY": 648.29785,
+        "confidence": 0.9991708018087373,
+        "layer": "MapBack_2"
+      },
+      "templateLocal": {
+        "x": 32650.215,
+        "y": 23279.404,
+        "mapX": 58.893066,
+        "mapY": 648.29785,
+        "confidence": 0.9991708018087373,
+        "layer": "MapBack_2"
+      },
+      "templateLocalOffsetPrev": [
+        32690.215,
+        23249.404
+      ],
+      "templateLocalOffset": {
+        "x": 32650.215,
+        "y": 23279.404,
+        "mapX": 58.893066,
+        "mapY": 648.29785,
+        "confidence": 0.9991708018087373,
+        "layer": "MapBack_2"
+      },
+      "siftLocal": [
+        32650.857,
+        23279.914
+      ]
+    }
+  ],
+  "bigMaps": [
+    {
+      "file": "bm_mondstadt.png",
+      "cropRect": [
+        4075,
+        2367,
+        480,
+        270
+      ],
+      "position": [
+        4315.0024,
+        2502.002
+      ],
+      "expectedCenter": [
+        34840,
+        19696
+      ],
+      "positionWithExpected": [
+        4314.993,
+        2501.9978
+      ],
+      "rect": [
+        4074,
+        2366,
+        482,
+        272
+      ]
+    },
+    {
+      "file": "bm_liyue.png",
+      "cropRect": [
+        3788,
+        3103,
+        480,
+        270
+      ],
+      "position": [
+        4028.0037,
+        3238.0024
+      ],
+      "expectedCenter": [
+        32544,
+        25584
+      ],
+      "positionWithExpected": [
+        4027.9922,
+        3237.9902
+      ],
+      "rect": [
+        3787,
+        3102,
+        481,
+        271
+      ]
+    },
+    {
+      "file": "bm_inazuma.png",
+      "cropRect": [
+        4956,
+        3699,
+        480,
+        270
+      ],
+      "position": [
+        5196.0117,
+        3834.0037
+      ],
+      "expectedCenter": [
+        41888,
+        30352
+      ],
+      "positionWithExpected": [
+        5196.006,
+        3833.9983
+      ],
+      "rect": [
+        4955,
+        3698,
+        482,
+        272
+      ]
+    },
+    {
+      "file": "bm_sumeru.png",
+      "cropRect": [
+        3136,
+        3030,
+        480,
+        270
+      ],
+      "position": [
+        3376.0032,
+        3164.9973
+      ],
+      "expectedCenter": [
+        27328,
+        25000
+      ],
+      "positionWithExpected": [
+        3375.9995,
+        3164.9976
+      ],
+      "rect": [
+        3135,
+        3030,
+        482,
+        271
+      ]
+    },
+    {
+      "file": "bm_fontaine.png",
+      "cropRect": [
+        2727,
+        2029,
+        480,
+        270
+      ],
+      "position": [
+        2967.0002,
+        2164.0007
+      ],
+      "expectedCenter": [
+        24056,
+        16992
+      ],
+      "positionWithExpected": [
+        2966.9983,
+        2163.9907
+      ],
+      "rect": [
+        2726,
+        2028,
+        481,
+        272
+      ]
+    }
+  ]
+}

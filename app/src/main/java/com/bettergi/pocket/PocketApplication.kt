@@ -7,6 +7,8 @@ import android.os.Process
 import android.util.Log
 import com.bettergi.pocket.analytics.BaiduAnalytics
 import com.bettergi.pocket.input.InputAccessibilityService
+import com.bettergi.pocket.pathing.map.AndroidMapAssetSource
+import com.bettergi.pocket.pathing.map.MapManager
 import com.bettergi.pocket.recognition.ocr.OcrFactory
 import com.bettergi.pocket.recognition.opencv.OpenCvRuntime
 import java.io.File
@@ -22,6 +24,8 @@ class PocketApplication : Application() {
             Log.e(TAG, "OpenCV initialization failed")
         }
         OcrFactory.init(this)
+        // 地图追踪的地图数据从 assets/pathing 读取，首次匹配时才加载
+        MapManager.assets = AndroidMapAssetSource(assets)
     }
 
     private fun currentProcessName(): String {

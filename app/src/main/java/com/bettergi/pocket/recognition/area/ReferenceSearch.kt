@@ -17,6 +17,16 @@ data class ReferenceSearchResult(
 )
 
 /**
+ * 参考画布矩形换算到当前画面的结果：`当前坐标 = offset + 参考坐标 × scale`。
+ */
+data class ReferenceRectMapping(
+    val scale: Double,
+    val offsetX: Double,
+    val offsetY: Double,
+    val rect: IntRect,
+)
+
+/**
  * 把 RecognitionObject 的参考画布坐标映射到当前截图上的搜索 ROI。
  * 公式对齐 BetterGI [ImageRegionReferenceSearchHelper]。
  */
@@ -121,6 +131,47 @@ object ReferenceSearch {
             scale = scale,
             usedReferenceSearch = true,
             effectiveTemplateSize = effectiveTemplateSize,
+        )
+    }
+
+    /**
+     * 把参考画布上的矩形按锚点规则换算到当前画面，不做外扩，也不要求是模板识别。
+     * 缩放与锚点偏移的公式与 [tryGetRegion] 相同，供按钮坐标、小地图裁剪等场景使用。
+     *
+     * @return 参数无效时返回 null
+     */
+    fun mapReferenceRect(
+        srcWidth: Int,
+        srcHeight: Int,
+        referenceImageSize: IntSize,
+        referenceRect: IntRect,
+        anchorMode: SearchAnchorMode = SearchAnchorMode.Auto,
+    ): ReferenceRectMapping? {
+        if (srcWidth <= 0 || srcHeight <= 0 ||
+            referenceImageSize.width <= 0 || referenceImageSize.height <= 0 ||
+            referenceRect.width <= 0 || referenceRect.height <= 0
+        ) {
+            return null
+        }
+        val scale = min(srcWidth / referenceImageSize.width.toDouble(), srcHeight / referenceImageSize.height.toDouble())
+        val (hAnchor, vAnchor) = resolveAnchor(anchorMode, referenceRect, referenceImageSize)
+        val scaledRefW = referenceImageSize.width * scale
+        val scaledRefH = referenceImageSize.height * scale
+        val offsetX = when (hAnchor) {
+            HorizontalAnchor.Right -> srcWidth - scaledRefW
+            HorizontalAnchor.Center -> (srcWidth - scaledRefW) / 2.0
+            HorizontalAnchor.Left -> 0.0
+        }
+        val offsetY = when (vAnchor) {
+            VerticalAnchor.Bottom -> srcHeight - scaledRefH
+            VerticalAnchor.Center -> (srcHeight - scaledRefH) / 2.0
+            VerticalAnchor.Top -> 0.0
+        }
+        return ReferenceRectMapping(
+            scale = scale,
+            offsetX = offsetX,
+            offsetY = offsetY,
+            rect = transformReferenceRect(referenceRect, scale, offsetX, offsetY),
         )
     }
 

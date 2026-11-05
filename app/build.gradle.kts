@@ -63,6 +63,11 @@ android {
         resValues = true
     }
 
+    androidResources {
+        // 地图追踪资源（assets/pathing，约 185 MiB）通过 AssetManager.openFd 直接 mmap 解码，必须不压缩
+        noCompress += listOf("webp", "png", "bin")
+    }
+
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
