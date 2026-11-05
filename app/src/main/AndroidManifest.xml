@@ -73,6 +73,14 @@
         </activity>
 
         <activity
+            android:name=".pathing.PathingRouteActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.BetterGIPocket.Transparent" />
+
+        <activity
             android:name=".capture.CapturePermissionActivity"
             android:exported="false"
             android:excludeFromRecents="true"

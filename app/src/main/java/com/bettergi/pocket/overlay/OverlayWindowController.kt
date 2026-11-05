@@ -46,6 +46,7 @@ import com.bettergi.pocket.genshin.GenshinLauncher
 import com.bettergi.pocket.genshin.GenshinPackages
 import com.bettergi.pocket.input.AccessibilityServiceHealth
 import com.bettergi.pocket.input.InputAccessibilityService
+import com.bettergi.pocket.pathing.settings.PathingSettings
 import com.bettergi.pocket.settings.TriggerSettings
 import com.bettergi.pocket.settings.TriggerSettingsRepository
 import java.text.SimpleDateFormat
@@ -123,6 +124,21 @@ class OverlayWindowController(
     private var pathingStatus: TextView? = null
     private var pathingMenuExpanded = false
     var onPathingToggle: (() -> Unit)? = null
+    var onPathingStart: (() -> Unit)? = null
+    var onPickRouteFile: (() -> Unit)? = null
+    var onPickRouteFolder: (() -> Unit)? = null
+    var onCycleMainAvatar: (() -> Unit)? = null
+    var onCycleGuardianAvatar: (() -> Unit)? = null
+    var onCycleSkillInterval: (() -> Unit)? = null
+    var onToggleLongPress: (() -> Unit)? = null
+    var onCycleGadget: (() -> Unit)? = null
+    private var pathingRoute: TextView? = null
+    private var pathingStart: TextView? = null
+    private var pathingMain: TextView? = null
+    private var pathingGuardian: TextView? = null
+    private var pathingInterval: TextView? = null
+    private var pathingLongPress: TextView? = null
+    private var pathingGadget: TextView? = null
     private var logHandleView: View? = null
     private var logBodyView: View? = null
     private var logTitle: TextView? = null
@@ -220,6 +236,13 @@ class OverlayWindowController(
         pathingExtras = root.findViewById(R.id.overlay_pathing_extras)
         pathingChevron = root.findViewById(R.id.overlay_pathing_chevron)
         pathingStatus = root.findViewById(R.id.overlay_pathing_status)
+        pathingRoute = root.findViewById(R.id.overlay_pathing_route)
+        pathingStart = root.findViewById(R.id.overlay_pathing_start)
+        pathingMain = root.findViewById(R.id.overlay_pathing_main)
+        pathingGuardian = root.findViewById(R.id.overlay_pathing_guardian)
+        pathingInterval = root.findViewById(R.id.overlay_pathing_interval)
+        pathingLongPress = root.findViewById(R.id.overlay_pathing_long_press)
+        pathingGadget = root.findViewById(R.id.overlay_pathing_gadget)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             root.findViewById<View>(R.id.overlay_group_pathing)?.visibility = View.GONE
         }
@@ -258,6 +281,14 @@ class OverlayWindowController(
         rowLaunch?.setOnClickListener { setLaunchMenuExpanded(!launchMenuExpanded) }
         pathingRow?.setOnClickListener { setPathingMenuExpanded(!pathingMenuExpanded) }
         pathingToggle?.setOnClickListener { onPathingToggle?.invoke() }
+        pathingStart?.setOnClickListener { onPathingStart?.invoke() }
+        root.findViewById<View>(R.id.overlay_pathing_pick_file)?.setOnClickListener { onPickRouteFile?.invoke() }
+        root.findViewById<View>(R.id.overlay_pathing_pick_folder)?.setOnClickListener { onPickRouteFolder?.invoke() }
+        pathingMain?.setOnClickListener { onCycleMainAvatar?.invoke() }
+        pathingGuardian?.setOnClickListener { onCycleGuardianAvatar?.invoke() }
+        pathingInterval?.setOnClickListener { onCycleSkillInterval?.invoke() }
+        pathingLongPress?.setOnClickListener { onToggleLongPress?.invoke() }
+        pathingGadget?.setOnClickListener { onCycleGadget?.invoke() }
         root.findViewById<View>(R.id.overlay_launch).setOnClickListener { launchGenshinFromButton() }
         root.findViewById<ImageButton>(R.id.overlay_bilibili).also { button ->
             ImageViewCompat.setImageTintList(button, null)
@@ -424,6 +455,13 @@ class OverlayWindowController(
         pathingExtras = null
         pathingChevron = null
         pathingStatus = null
+        pathingRoute = null
+        pathingStart = null
+        pathingMain = null
+        pathingGuardian = null
+        pathingInterval = null
+        pathingLongPress = null
+        pathingGadget = null
     }
 
     private fun collapseOnOutsideTouch() {
@@ -624,6 +662,24 @@ class OverlayWindowController(
                     setLogWindowVisible(true)
                 }
             }
+        }
+    }
+
+    fun setRouteRunning(running: Boolean) {
+        mainHandler.post {
+            pathingStart?.text = if (running) "停止路线" else "开始路线"
+            if (running) setPathingMenuExpanded(true)
+        }
+    }
+
+    fun showPathing(routeLabel: String, settings: PathingSettings) {
+        mainHandler.post {
+            pathingRoute?.text = routeLabel
+            pathingMain?.text = "行走位 ${settings.mainAvatarIndex ?: "无"}"
+            pathingGuardian?.text = "生存位 ${settings.guardianAvatarIndex ?: "无"}"
+            pathingInterval?.text = "E 间隔 ${settings.guardianSkillIntervalSeconds?.let { "${it.toInt()} 秒" } ?: "关"}"
+            pathingLongPress?.text = "长按 E ${if (settings.guardianSkillLongPress) "开" else "关"}"
+            pathingGadget?.text = "自动 Z ${if (settings.useGadgetIntervalMs == 0) "关" else "${settings.useGadgetIntervalMs} ms"}"
         }
     }
 

@@ -23,8 +23,11 @@ import com.bettergi.pocket.input.InputAccessibilityService
 import com.bettergi.pocket.overlay.OverlayWindowController
 import com.bettergi.pocket.pathing.PathingController
 import com.bettergi.pocket.pathing.PathingLayout
+import com.bettergi.pocket.pathing.PathingRouteActivity
 import com.bettergi.pocket.pathing.executor.ScreenCaptureFrameSource
 import com.bettergi.pocket.pathing.map.MapManager
+import com.bettergi.pocket.pathing.settings.PathingRouteStore
+import com.bettergi.pocket.pathing.settings.PathingSettingsRepository
 import com.bettergi.pocket.recognition.RecognitionAssets
 import com.bettergi.pocket.settings.TriggerSettings
 import com.bettergi.pocket.settings.TriggerSettingsRepository
@@ -38,6 +41,8 @@ class TriggerForegroundService : Service() {
     private lateinit var genshinLaunchMonitor: GenshinLaunchMonitor
     private lateinit var engine: TriggerEngine
     private lateinit var pathingController: PathingController
+    private lateinit var pathingSettingsRepository: PathingSettingsRepository
+    private lateinit var pathingRouteStore: PathingRouteStore
 
     @Volatile
     private var requestingCapturePermission = false
@@ -97,6 +102,8 @@ class TriggerForegroundService : Service() {
             ),
             actionController = AccessibilityAutomationController(overlayController),
         )
+        pathingSettingsRepository = PathingSettingsRepository(applicationContext)
+        pathingRouteStore = PathingRouteStore(applicationContext)
         pathingController = PathingController(
             frames = ScreenCaptureFrameSource(captureController),
             loadLayout = {
@@ -107,8 +114,35 @@ class TriggerForegroundService : Service() {
             log = { message -> overlayController.log(message) },
             onReadoutChanged = { running -> overlayController.setPathingRunning(running) },
             onStatus = { text -> overlayController.setPathingStatus(text) },
+            onRouteChanged = { running -> overlayController.setRouteRunning(running) },
+            captureSize = { captureController.capturedSize() },
+            pathingSettings = { pathingSettingsRepository.get() },
+            loadRoutes = { pathingRouteStore.readRoutes() },
         )
         overlayController.onPathingToggle = { pathingController.toggleReadout() }
+        overlayController.onPathingStart = { pathingController.startRoute() }
+        overlayController.onPickRouteFile = { openRoutePicker(folder = false) }
+        overlayController.onPickRouteFolder = { openRoutePicker(folder = true) }
+        overlayController.onCycleMainAvatar = {
+            pathingSettingsRepository.cycleMainAvatar()
+            refreshPathingPanel()
+        }
+        overlayController.onCycleGuardianAvatar = {
+            pathingSettingsRepository.cycleGuardianAvatar()
+            refreshPathingPanel()
+        }
+        overlayController.onCycleSkillInterval = {
+            pathingSettingsRepository.cycleSkillInterval()
+            refreshPathingPanel()
+        }
+        overlayController.onToggleLongPress = {
+            pathingSettingsRepository.toggleLongPress()
+            refreshPathingPanel()
+        }
+        overlayController.onCycleGadget = {
+            pathingSettingsRepository.cycleGadgetInterval()
+            refreshPathingPanel()
+        }
         settingsRepository.addListener(settingsListener)
         genshinLaunchMonitor.start()
     }
@@ -118,8 +152,10 @@ class TriggerForegroundService : Service() {
             ACTION_START -> {
                 startInForeground(sharing = captureController.isRunning())
                 overlayController.show()
+                refreshPathingPanel()
                 InputAccessibilityService.promptIfDisconnected(applicationContext)
             }
+            ACTION_PATHING_ROUTE -> refreshPathingPanel()
             ACTION_STOP -> {
                 shutdown()
                 stopSelf()
@@ -188,6 +224,18 @@ class TriggerForegroundService : Service() {
         if (!shutDown) {
             startInForeground(sharing = false)
         }
+    }
+
+    private fun refreshPathingPanel() {
+        if (!::pathingRouteStore.isInitialized || !::pathingSettingsRepository.isInitialized) return
+        overlayController.showPathing(pathingRouteStore.label(), pathingSettingsRepository.get())
+    }
+
+    private fun openRoutePicker(folder: Boolean) {
+        val intent = Intent(this, PathingRouteActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(PathingRouteActivity.EXTRA_FOLDER, folder)
+        startActivity(intent)
     }
 
     private fun requestCapturePermission() {
@@ -261,6 +309,7 @@ class TriggerForegroundService : Service() {
         const val ACTION_STOP = "com.bettergi.pocket.action.STOP"
         const val ACTION_CAPTURE_RESULT = "com.bettergi.pocket.action.CAPTURE_RESULT"
         const val ACTION_CAPTURE_DENIED = "com.bettergi.pocket.action.CAPTURE_DENIED"
+        const val ACTION_PATHING_ROUTE = "com.bettergi.pocket.action.PATHING_ROUTE"
 
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_RESULT_DATA = "extra_result_data"
