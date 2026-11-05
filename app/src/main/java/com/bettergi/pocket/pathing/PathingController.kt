@@ -12,6 +12,7 @@ import com.bettergi.pocket.pathing.input.GameInput
 import com.bettergi.pocket.pathing.input.TouchClient
 import com.bettergi.pocket.pathing.minimap.MiniMapLocator
 import com.bettergi.pocket.pathing.model.PathingRoutes
+import com.bettergi.pocket.pathing.navigation.Navigation
 import com.bettergi.pocket.pathing.settings.PathingSettings
 import com.bettergi.pocket.pathing.tp.BigMapUi
 import com.bettergi.pocket.pathing.tp.MapTeleport
@@ -197,10 +198,11 @@ class PathingController(
             onStatus("还没选择路线")
             return
         }
-        val runtime = PathingRuntime(frames)
+        val runtime = PathingRuntime(frames, stopCheck = { routeStopReason() })
         this.runtime = runtime
         TaskGate.exclusiveRunning = true
         job = Job.Route
+        onRouteChanged(true)
         onStatus(routes.first().first)
         val thread = Thread({
             try {
@@ -222,33 +224,47 @@ class PathingController(
                     bigMap = bigMap,
                     log = log,
                 )
-                val executor = PathExecutor(
-                    runtime = runtime,
-                    input = input,
-                    locator = locator,
-                    settings = pathingSettings(),
-                    vision = vision,
-                    teleport = teleport,
-                    log = log,
-                )
+                val settings = pathingSettings()
+                var completed = 0
                 for ((name, json) in routes) {
                     if (runtime.cancelled) break
                     onStatus(name)
                     log("开始路线 $name")
-                    val result = executor.execute(PathingRoutes.parse(json))
+                    val route = try {
+                        PathingRoutes.parse(json)
+                    } catch (e: Exception) {
+                        log("$name 无法解析：${e.message ?: e.javaClass.simpleName}")
+                        continue
+                    }
+                    // 每条路线一个执行器，卡死次数和跳过状态不跨路线（BGI 每条路线 new PathExecutor）
+                    val executor = PathExecutor(
+                        runtime = runtime,
+                        input = input,
+                        locator = locator,
+                        settings = settings,
+                        vision = vision,
+                        teleport = teleport,
+                        log = log,
+                    )
+                    val result = executor.execute(route)
                     if (result.isSuccess) {
+                        completed++
                         log("$name 完成")
                     } else {
+                        // 与 BGI 调度一致：一条失败不影响后面的路线，停止时才退出
                         log("$name 未完成：${result.errorMessage ?: "未知原因"}")
-                        break
                     }
                 }
+                if (routes.size > 1) log("路线执行结束：完成 $completed / ${routes.size}")
             } catch (e: CancellationException) {
                 // 停止
             } catch (e: Exception) {
                 log("路线中断：${e.message ?: e.javaClass.simpleName}")
                 onStatus("路线中断")
             } finally {
+                runtime.stopReason?.let { log("地图追踪已停止：$it") }
+                touch.releaseAll()
+                Navigation.release()
                 TaskGate.exclusiveRunning = false
                 job = Job.None
                 synchronized(lock) {
@@ -269,6 +285,14 @@ class PathingController(
             onRouteChanged(false)
             log("无法开始路线：${e.message ?: e.javaClass.simpleName}")
         }
+    }
+
+    /** 设计第 6 节的停止来源：屏幕共享停止、无障碍断开、原神离开前台。 */
+    private fun routeStopReason(): String? = when {
+        !frames.isCapturing() -> "屏幕共享已停止"
+        !InputAccessibilityService.isConnected() -> "无障碍已断开"
+        genshinInForeground() == false -> LocationReadoutChecks.GENSHIN_BACKGROUND
+        else -> null
     }
 
     private fun missingCalibration(layout: PathingLayout): List<String> {

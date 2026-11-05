@@ -69,9 +69,7 @@ class TrapEscaper(
     fun rotateAndMove() {
         increaseRandomAngle()
         input.releasePad()
-        if (motion() == MotionStatus.Climb || motion() == MotionStatus.Fly) {
-            input.tapButton(GameButton.Drop)
-        }
+        dropIfAirborne()
         runtime.delay(75)
         input.tapButton(GameButton.Attack)
         runtime.delay(500)
@@ -103,9 +101,7 @@ class TrapEscaper(
         input.tapButton(GameButton.Jump)
         runtime.delay(delayMs.toLong())
         input.releasePad()
-        if (motion() == MotionStatus.Climb || motion() == MotionStatus.Fly) {
-            input.tapButton(GameButton.Drop)
-        }
+        dropIfAirborne()
     }
 
     private fun moveRight(delayMs: Int) {
@@ -114,7 +110,13 @@ class TrapEscaper(
         input.tapButton(GameButton.Jump)
         runtime.delay(delayMs.toLong())
         input.releasePad()
-        if (motion() == MotionStatus.Climb || motion() == MotionStatus.Fly) {
+        dropIfAirborne()
+    }
+
+    /** BGI 无条件按 X。手机的下落按钮只在攀爬/滑翔时出现，所以先看状态。 */
+    private fun dropIfAirborne() {
+        val status = motion()
+        if (status == MotionStatus.Climb || status == MotionStatus.Fly) {
             input.tapButton(GameButton.Drop)
         }
     }

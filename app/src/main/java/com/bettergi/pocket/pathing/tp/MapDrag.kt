@@ -6,6 +6,7 @@ import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
@@ -79,6 +80,118 @@ object MapDrag {
             center.x + (sentX * zoom / MAP_SCALE_FACTOR).toFloat(),
             center.y + (sentY * zoom / MAP_SCALE_FACTOR).toFloat(),
         )
+    }
+
+    /** 边缘留白，1080p 像素。来源：BGI `MouseMoveMap` 的 `edgePadding`。 */
+    const val EDGE_PADDING = 115.0
+
+    /** 大地图左上角 UI 遮挡区，1080p 像素。PC 值，手机待按截图重新量取。来源：BGI `MapUiForbiddenAreaWidth/Height`。 */
+    const val FORBIDDEN_WIDTH = 360.0
+    const val FORBIDDEN_HEIGHT = 430.0
+
+    /**
+     * 一次拖动的计划。[sentX]/[sentY] 为实际发送的 1080p 像素（可能因屏幕放不下而按比例缩短），
+     * [startX]/[startY] 为原生屏幕上的起点。
+     */
+    data class DragPlan(val sentX: Int, val sentY: Int, val startX: Double, val startY: Double)
+
+    /**
+     * 来源：BGI `MouseMoveMap` 的起点和缩短规则：留白 115·k，整段放不下时按 0.85 逐次缩短，
+     * 起点在屏幕中心减去半段位移附近抖动 ±W/24、±H/24，并且起终点都不进左上遮挡区。
+     *
+     * @param scale 原生 / 1080p 的比例 `k`
+     * @param random 返回 [0, 1) 的随机数
+     */
+    fun planDrag(
+        pixelDeltaX: Int,
+        pixelDeltaY: Int,
+        width: Double,
+        height: Double,
+        scale: Double,
+        random: () -> Double,
+    ): DragPlan {
+        val expectedX = pixelDeltaX * scale
+        val expectedY = pixelDeltaY * scale
+        val edge = max(8.0 * scale, EDGE_PADDING * scale)
+        val minX = edge
+        val maxX = width - edge
+        val minY = edge
+        val maxY = height - edge
+        val availableX = max(0.0, maxX - minX)
+        val availableY = max(0.0, maxY - minY)
+        val ratioX = if (expectedX == 0.0) 1.0 else availableX / abs(expectedX)
+        val ratioY = if (expectedY == 0.0) 1.0 else availableY / abs(expectedY)
+        var ratio = min(1.0, min(ratioX, ratioY))
+        val forbiddenWidth = FORBIDDEN_WIDTH * scale
+        val forbiddenHeight = FORBIDDEN_HEIGHT * scale
+        val avoidPadding = max(4.0, 6.0 * scale)
+        repeat(12) {
+            val sentX = (pixelDeltaX * ratio).toInt()
+            val sentY = (pixelDeltaY * ratio).toInt()
+            val actualX = sentX * scale
+            val actualY = sentY * scale
+            val startMinX = max(minX, minX - actualX)
+            val startMaxX = min(maxX, maxX - actualX)
+            val startMinY = max(minY, minY - actualY)
+            val startMaxY = min(maxY, maxY - actualY)
+            if (startMinX <= startMaxX && startMinY <= startMaxY) {
+                val preferredX = width / 2.0 - actualX / 2.0 + (random() - 0.5) * width / 12.0
+                val preferredY = height / 2.0 - actualY / 2.0 + (random() - 0.5) * height / 12.0
+                val start = pickSafeStart(
+                    preferredX, preferredY,
+                    startMinX, startMaxX, startMinY, startMaxY,
+                    actualX, actualY,
+                    minX, maxX, minY, maxY,
+                    forbiddenWidth, forbiddenHeight, avoidPadding,
+                )
+                if (start != null) return DragPlan(sentX, sentY, start.first, start.second)
+            }
+            ratio *= 0.85
+        }
+        return DragPlan(0, 0, (width / 2.0).coerceIn(minX, max(minX, maxX)), (height / 2.0).coerceIn(minY, max(minY, maxY)))
+    }
+
+    /** 来源：BGI `TryPickSafeMapDragStart`。 */
+    private fun pickSafeStart(
+        preferredX: Double,
+        preferredY: Double,
+        startMinX: Double,
+        startMaxX: Double,
+        startMinY: Double,
+        startMaxY: Double,
+        deltaX: Double,
+        deltaY: Double,
+        safeMinX: Double,
+        safeMaxX: Double,
+        safeMinY: Double,
+        safeMaxY: Double,
+        forbiddenWidth: Double,
+        forbiddenHeight: Double,
+        avoidPadding: Double,
+    ): Pair<Double, Double>? {
+        fun safe(x: Double, y: Double): Boolean {
+            return x in safeMinX..safeMaxX && y in safeMinY..safeMaxY &&
+                !(x < forbiddenWidth && y < forbiddenHeight)
+        }
+        var best: Pair<Double, Double>? = null
+        var bestDistance = Double.MAX_VALUE
+        val safeForbiddenX = forbiddenWidth + avoidPadding
+        val safeForbiddenY = forbiddenHeight + avoidPadding
+        val xs = doubleArrayOf(preferredX, startMinX, startMaxX, safeForbiddenX, safeForbiddenX - deltaX)
+        val ys = doubleArrayOf(preferredY, startMinY, startMaxY, safeForbiddenY, safeForbiddenY - deltaY)
+        for (rawX in xs) {
+            for (rawY in ys) {
+                val x = rawX.coerceIn(startMinX, startMaxX)
+                val y = rawY.coerceIn(startMinY, startMaxY)
+                if (!safe(x, y) || !safe(x + deltaX, y + deltaY)) continue
+                val distance = (x - preferredX) * (x - preferredX) + (y - preferredY) * (y - preferredY)
+                if (distance < bestDistance) {
+                    bestDistance = distance
+                    best = x to y
+                }
+            }
+        }
+        return best
     }
 
     /**

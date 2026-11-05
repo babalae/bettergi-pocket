@@ -19,7 +19,11 @@ class PartyControl(
     private val log: (String) -> Unit,
     private val nowMs: () -> Long,
 ) {
+    /** BGI `Avatar.LastSkillTime`：真正放出 E 的时刻，用于「技能就绪」判断。 */
     private var lastSkillAtMs = 0L
+
+    /** BGI `PathExecutor._elementalSkillLastUseTime`：每次尝试后都更新，切人失败也不会每帧重试。 */
+    private var lastSkillAttemptAtMs = 0L
 
     fun switchTo(index: Int?, requireSkillReady: Boolean = false): Boolean {
         if (index == null) return false
@@ -37,7 +41,11 @@ class PartyControl(
                 log("无法识别出战角色，已点第 $index 号位")
                 return true
             }
-            if (activePartySlot(signatures) == index) return true
+            if (activePartySlot(signatures) == index) {
+                // BGI `SwitchAvatar`：切换成功后等 100 ms
+                runtime.delay(100)
+                return true
+            }
             dropIfAirborne()
             input.tapButton(partyButton(index))
             runtime.delay(250)
@@ -50,6 +58,14 @@ class PartyControl(
      * @param walking 当前是否按着前进。钟离序列会松开再重新按住。
      */
     fun useGuardianSkill(walking: Boolean) {
+        try {
+            useGuardianSkillOnce(walking)
+        } finally {
+            lastSkillAttemptAtMs = nowMs()
+        }
+    }
+
+    private fun useGuardianSkillOnce(walking: Boolean) {
         val index = settings.guardianAvatarIndex ?: return
         runtime.delay(200)
         if (!switchTo(index, requireSkillReady = true)) return
@@ -75,7 +91,7 @@ class PartyControl(
 
     fun skillIntervalElapsed(): Boolean {
         val seconds = settings.guardianSkillIntervalSeconds ?: return false
-        return nowMs() - lastSkillAtMs > seconds * 1000.0
+        return nowMs() - lastSkillAttemptAtMs > seconds * 1000.0
     }
 
     private fun readSignatures(): List<Int>? {

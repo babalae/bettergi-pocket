@@ -26,6 +26,7 @@ import com.bettergi.pocket.pathing.vision.MotionStatus
 import com.bettergi.pocket.pathing.vision.PathingVision
 import java.util.concurrent.CancellationException
 import kotlin.math.abs
+import org.opencv.core.Mat
 
 /**
  * 路线主循环。删除项（切队、回血、赶路、月卡、结束条件）不再进入循环。
@@ -63,13 +64,10 @@ class PathExecutor(
 
         val segments = PathingRoutes.segment(route)
         runtime.delay(100)
+        // BGI 只在第一次加载，之后只重置上一位置。地图数据由调用方在整个任务结束时释放
         Navigation.warmUp(route.mapMatchMethod)
         val map = MapManager.getMap(route.mapName, route.mapMatchMethod)
-        return try {
-            runSegments(segments, map)
-        } finally {
-            Navigation.release()
-        }
+        return runSegments(segments, map)
     }
 
     private fun runSegments(
@@ -205,126 +203,135 @@ class PathExecutor(
             if (nowMs() - started > 240_000L) {
                 throw RetryException("路径点执行超时，放弃整条路径")
             }
-            sample = sample(waypoint)
-            position = sample.point
-            extraMs = sample.extraMs
-            if (extraMs > 0) {
-                input.holdForward()
-                extraMs += 1000
-            }
-            val distance = Navigation.getDistance(waypoint.imageX, waypoint.imageY, position)
-            if (distance < 4) {
-                log("到达路径点附近")
-                break
-            }
-            if (distance > 500) {
-                farCount++
-                if (farCount > 50) {
-                    throw HandledException(
-                        if (position.isDefault) "重试多次后，当前点位无法被识别，放弃此路径！"
-                        else "目标距离过远，可能是当前点位无法识别，放弃此路径！",
-                    )
+            // 与 BGI 相同：同一帧既定位又算视角，小地图只裁一次
+            val screen = runtime.nextFrame(LocationReport.FRESH_FRAME_TIMEOUT_MS)
+            val miniMap = screen?.let { locator.extract(it.bgr) }
+            try {
+                sample = positionAndTime(screen, miniMap, waypoint)
+                position = sample.point
+                extraMs = sample.extraMs
+                if (extraMs > 0) {
+                    input.holdForward()
+                    extraMs += 1000
                 }
-                if (farCount % 5 == 0) {
-                    log("距离过远 ${format(distance)}，重试")
+                val distance = Navigation.getDistance(waypoint.imageX, waypoint.imageY, position)
+                if (distance < 4) {
+                    log("到达路径点附近")
+                    break
                 }
-                if (farCount % 10 == 0) {
-                    resolveAnomalies(null)
-                    Navigation.setPrevPosition(stablePosition.x, stablePosition.y)
-                    runtime.delay(500)
+                if (distance > 500) {
+                    farCount++
+                    if (farCount > 50) {
+                        throw HandledException(
+                            if (position.isDefault) "重试多次后，当前点位无法被识别，放弃此路径！"
+                            else "目标距离过远，可能是当前点位无法识别，放弃此路径！",
+                        )
+                    }
+                    if (farCount % 5 == 0) {
+                        log("距离过远 ${format(distance)}，重试")
+                    }
+                    if (farCount % 10 == 0) {
+                        resolveAnomalies(screen?.bgr)
+                        Navigation.setPrevPosition(stablePosition.x, stablePosition.y)
+                        runtime.delay(500)
+                    }
+                    runtime.delay(50)
+                    continue
+                } else {
+                    stablePosition = position
                 }
-                runtime.delay(50)
-                continue
-            } else {
-                stablePosition = position
-            }
-            if (waypoint.moveMode != MoveMode.Climb && nowMs() - lastRecord > 1000L + extraMs) {
-                lastRecord = nowMs()
-                history += position
-                if (history.size > 8) {
-                    val newest = history.last()
-                    val older = history[history.size - 8]
-                    if (abs(newest.x - older.x) + abs(newest.y - older.y) < 3f) {
-                        inTrap++
-                        if (inTrap > 2) throw RetryException("此路线出现3次卡死，重试一次路线或放弃此路线！")
-                        log("疑似卡死，尝试脱离...")
-                        trap.rotateAndMove()
-                        trap.moveTo(waypoint)
+                if (waypoint.moveMode != MoveMode.Climb && nowMs() - lastRecord > 1000L + extraMs) {
+                    lastRecord = nowMs()
+                    history += position
+                    if (history.size > 8) {
+                        val newest = history.last()
+                        val older = history[history.size - 8]
+                        if (abs(newest.x - older.x) + abs(newest.y - older.y) < 3f) {
+                            inTrap++
+                            if (inTrap > 2) throw RetryException("此路线出现3次卡死，重试一次路线或放弃此路线！")
+                            log("疑似卡死，尝试脱离...")
+                            trap.rotateAndMove()
+                            trap.moveTo(waypoint)
+                            input.holdForward()
+                            log("卡死脱离结束")
+                            continue
+                        }
+                    }
+                }
+                val target = Navigation.getTargetOrientation(waypoint.imageX, waypoint.imageY, position)
+                val diff = if (miniMap != null) rotate.rotateToApproach(target, miniMap) else 0f
+                if (nowMs() - started > 2_000L && frame >= 5) {
+                    if (abs(diff) > 5f) {
+                        offAngleFrames++
+                        if (offAngleSince == 0L) offAngleSince = nowMs()
+                    } else {
+                        offAngleFrames = 0
+                        offAngleSince = 0L
+                    }
+                    if (offAngleFrames >= 3 && offAngleSince > 0L && nowMs() - offAngleSince > 2_000L) {
+                        input.releasePad()
+                        waitUntilRotated(target, 2)
                         input.holdForward()
-                        log("卡死脱离结束")
+                    }
+                }
+                when (waypoint.moveMode) {
+                    MoveMode.Fly -> {
+                        val status = screen?.let { vision.motionStatus(it.bgr) } ?: MotionStatus.Unknown
+                        if (status != MotionStatus.Fly) {
+                            input.tapButton(GameButton.Jump)
+                            runtime.delay(200)
+                        }
+                        runtime.delay(100)
                         continue
                     }
-                }
-            }
-            val target = Navigation.getTargetOrientation(waypoint.imageX, waypoint.imageY, position)
-            val diff = rotateCurrent(target)
-            if (nowMs() - started > 2_000L && frame >= 5) {
-                if (abs(diff) > 5f) {
-                    offAngleFrames++
-                    if (offAngleSince == 0L) offAngleSince = nowMs()
-                } else {
-                    offAngleFrames = 0
-                    offAngleSince = 0L
-                }
-                if (offAngleFrames >= 3 && offAngleSince > 0L && nowMs() - offAngleSince > 2_000L) {
-                    input.releasePad()
-                    waitUntilRotated(target, 2)
-                    input.holdForward()
-                }
-            }
-            when (waypoint.moveMode) {
-                MoveMode.Fly -> {
-                    if (motion() != MotionStatus.Fly) {
+                    MoveMode.Jump -> {
                         input.tapButton(GameButton.Jump)
                         runtime.delay(200)
+                        continue
                     }
-                    runtime.delay(100)
-                    continue
-                }
-                MoveMode.Jump -> {
-                    input.tapButton(GameButton.Jump)
-                    runtime.delay(200)
-                    continue
-                }
-                MoveMode.Run -> {
-                    val wantSprint = distance > 20
-                    if (wantSprint != sprintHeld) {
-                        if (wantSprint) input.holdButton(GameButton.Sprint) else input.releaseButton(GameButton.Sprint)
-                        sprintHeld = wantSprint
-                    }
-                }
-                MoveMode.Dash -> {
-                    if (distance > 20 && nowMs() - lastSprintAt > 1000L) {
-                        lastSprintAt = nowMs()
-                        input.tapButton(GameButton.Sprint)
-                    }
-                }
-                MoveMode.Climb -> Unit
-                else -> {
-                    if (distance > 10 && settings.guardianAvatarIndex != null && party.skillIntervalElapsed()) {
-                        if (nowMs() - switchedAt < 1000L &&
-                            settings.mainAvatarIndex != null &&
-                            settings.guardianAvatarIndex != settings.mainAvatarIndex
-                        ) {
-                            runtime.delay(800)
+                    MoveMode.Run -> {
+                        val wantSprint = distance > 20
+                        if (wantSprint != sprintHeld) {
+                            if (wantSprint) input.holdButton(GameButton.Sprint) else input.releaseButton(GameButton.Sprint)
+                            sprintHeld = wantSprint
                         }
-                        party.useGuardianSkill(walking = true)
                     }
-                    if (distance > 20 && PathingSettings.AUTO_RUN && nowMs() - lastSprintAt > 2500L) {
-                        lastSprintAt = nowMs()
-                        input.tapButton(GameButton.Sprint)
+                    MoveMode.Dash -> {
+                        if (distance > 20 && nowMs() - lastSprintAt > 1000L) {
+                            lastSprintAt = nowMs()
+                            input.tapButton(GameButton.Sprint)
+                        }
+                    }
+                    MoveMode.Climb -> Unit
+                    else -> {
+                        if (distance > 10 && settings.guardianAvatarIndex != null && party.skillIntervalElapsed()) {
+                            if (nowMs() - switchedAt < 1000L &&
+                                settings.mainAvatarIndex != null &&
+                                settings.guardianAvatarIndex != settings.mainAvatarIndex
+                            ) {
+                                runtime.delay(800)
+                            }
+                            party.useGuardianSkill(walking = true)
+                        }
+                        if (distance > 20 && PathingSettings.AUTO_RUN && nowMs() - lastSprintAt > 2500L) {
+                            lastSprintAt = nowMs()
+                            input.tapButton(GameButton.Sprint)
+                        }
                     }
                 }
+                if (settings.useGadgetIntervalMs > 0 && nowMs() - lastGadgetAtMs > settings.useGadgetIntervalMs) {
+                    input.tapButton(GameButton.Gadget)
+                    lastGadgetAtMs = nowMs()
+                }
+                if (nowMs() - lastPickupAtMs > PathingSettings.PICKUP_INTERVAL_MS) {
+                    pickup()
+                    lastPickupAtMs = nowMs()
+                }
+                runtime.delay(PathingSettings.FRAME_INTERVAL_MS)
+            } finally {
+                miniMap?.release()
+                screen?.bgr?.release()
             }
-            if (settings.useGadgetIntervalMs > 0 && nowMs() - lastGadgetAtMs > settings.useGadgetIntervalMs) {
-                input.tapButton(GameButton.Gadget)
-                lastGadgetAtMs = nowMs()
-            }
-            if (nowMs() - lastPickupAtMs > PathingSettings.PICKUP_INTERVAL_MS) {
-                pickup()
-                lastPickupAtMs = nowMs()
-            }
-            runtime.delay(PathingSettings.FRAME_INTERVAL_MS)
         }
         input.releasePad()
         input.releaseButton(GameButton.Sprint)
@@ -394,8 +401,9 @@ class PathExecutor(
         if (params.contains("not_wait", ignoreCase = true)) {
             input.tapButton(GameButton.Gadget)
         } else {
+            // BGI 用 double.TryParse 读最大等待秒数，解析失败时为 0
             var maxWait = 100.0
-            params.toDoubleOrNull()?.let { maxWait = it }
+            if (params.isNotEmpty()) maxWait = params.toDoubleOrNull() ?: 0.0
             val cd = readGadgetCd()
             when {
                 cd != null && cd > 100 -> {
@@ -416,18 +424,27 @@ class PathExecutor(
 
     private fun sample(waypoint: WaypointForTrack): PositionSample {
         val frame = runtime.nextFrame(LocationReport.FRESH_FRAME_TIMEOUT_MS)
-            ?: return PositionSample(Point2f.DEFAULT, 0)
+        val miniMap = frame?.let { locator.extract(it.bgr) }
         try {
-            return positionAndTime(frame, waypoint)
+            return positionAndTime(frame, miniMap, waypoint)
         } finally {
-            frame.bgr.release()
+            miniMap?.release()
+            frame?.bgr?.release()
         }
     }
 
-    private fun positionAndTime(frame: CapturedBgrFrame, waypoint: WaypointForTrack): PositionSample {
-        var position = locate(frame, waypoint)
+    /**
+     * 来源：BGI `GetPositionAndTime`。没有新画面或小地图不在画面内时按识别失败 (0,0) 处理，
+     * 仍走 `misidentification` 的兜底。
+     */
+    private fun positionAndTime(frame: CapturedBgrFrame?, miniMap: Mat?, waypoint: WaypointForTrack): PositionSample {
+        var position = if (miniMap != null) {
+            Navigation.getPosition(miniMap, waypoint.mapName, waypoint.mapMatchMethod)
+        } else {
+            Point2f.DEFAULT
+        }
         var extra = 0
-        if (position.isDefault && !vision.isInMainUi(frame.bgr)) {
+        if (position.isDefault && frame != null && !vision.isInMainUi(frame.bgr)) {
             log("小地图定位失败，且当前不是主界面，进入异常处理")
             resolveAnomalies(frame.bgr)
         }
@@ -446,19 +463,22 @@ class PathExecutor(
                 }
                 "mapRecognition" -> {
                     val started = nowMs()
+                    teleport.openBigMap(waypoint.mapName)
                     try {
-                        teleport.openBigMap(waypoint.mapName)
                         val game = teleport.positionFromBigMap(waypoint.mapName)
                         if (game != null) {
                             position = MapManager.getMap(waypoint.mapName, waypoint.mapMatchMethod)
                                 .convertGenshinMapCoordinatesToImageCoordinates(game)
                         }
-                        teleport.closeMap()
-                        waitForMainUi()
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
-                        log(e.message ?: "地图中心点识别失败")
+                        log("地图中心点识别失败！")
                     }
+                    teleport.closeMap()
+                    waitForMainUi()
                     extra = (nowMs() - started).toInt()
+                    log("未识别到具体路径，打开地图计算中心点(${format(position.x.toDouble())}, ${format(position.y.toDouble())})")
                 }
             }
         } else {
@@ -467,26 +487,13 @@ class PathExecutor(
         return PositionSample(position, extra)
     }
 
+    /** 卡死脱困用的原始定位，不走识别失败兜底（BGI `TrapEscaper` 直接调 `Navigation.GetPosition`）。 */
     private fun locate(frame: CapturedBgrFrame, waypoint: WaypointForTrack): Point2f {
         val miniMap = locator.extract(frame.bgr) ?: return Point2f.DEFAULT
         try {
             return Navigation.getPosition(miniMap, waypoint.mapName, waypoint.mapMatchMethod)
         } finally {
             miniMap.release()
-        }
-    }
-
-    private fun rotateCurrent(target: Int): Float {
-        val frame = runtime.nextFrame(LocationReport.FRESH_FRAME_TIMEOUT_MS) ?: return 0f
-        try {
-            val miniMap = locator.extract(frame.bgr) ?: return 0f
-            try {
-                return rotate.rotateToApproach(target, miniMap)
-            } finally {
-                miniMap.release()
-            }
-        } finally {
-            frame.bgr.release()
         }
     }
 
@@ -514,12 +521,14 @@ class PathExecutor(
         }
     }
 
-    private fun resolveAnomalies(frame: org.opencv.core.Mat?) {
+    private fun resolveAnomalies(frame: Mat?) {
         val owned = if (frame == null) runtime.nextFrame(LocationReport.FRESH_FRAME_TIMEOUT_MS) else null
         val mat = frame ?: owned?.bgr ?: return
         try {
             val close = vision.closeButton(mat)
-            if (close != null && !vision.isInBigMap(mat)) {
+            if (close != null) {
+                // 排除大地图。BGI 在这里直接 return，不再判断剧情
+                if (vision.isInBigMap(mat)) return
                 log("检测到其他界面，点击关闭")
                 input.tapNative(close.first, close.second)
                 runtime.delay(1000)

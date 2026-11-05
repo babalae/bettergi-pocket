@@ -16,6 +16,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  * `dispatchGesture` 会取消本服务正在进行的手势，所以每次派发都要把仍按住的触点用
  * `continueStroke` 续进新手势。被系统取消（例如用户自己触屏）时丢掉旧笔画并重建。
  * `continueStroke` 需要 Android 8.0。更低版本只派发不含持续触点的点按。
+ *
+ * 系统（`MotionEventInjector.prepareToContinueOldGesture`）对续接有三条硬要求：
+ * 1. 续段起点必须与上一段终点完全相同，所以每个触点记录上一段的实际终点。
+ * 2. 新手势第 0 ms 的触点数必须等于上一手势未结束的触点数，所以新笔画从第 1 ms 开始。
+ * 3. 续接手势排在上一手势已排期事件之后执行，所以按住段要短，且位置没变时不重复派发。
+ * `willContinue` 的笔画结束后触点保持按下，直到续段到来，没有超时。
  */
 class GestureComposer(
     private val service: AccessibilityService,
@@ -23,14 +29,17 @@ class GestureComposer(
 ) {
     private class Finger(
         val id: String,
+        /** 目标位置。 */
         var x: Float,
         var y: Float,
-        var fromX: Float = x,
-        var fromY: Float = y,
-        var segmentMs: Long = HOLD_SLICE_MS,
-        var stroke: GestureDescription.StrokeDescription? = null,
-        var lift: Boolean = false,
-    )
+    ) {
+        /** 上一段笔画的终点，续段从这里开始。 */
+        var endX: Float = x
+        var endY: Float = y
+        var segmentMs: Long = HOLD_SLICE_MS
+        var stroke: GestureDescription.StrokeDescription? = null
+        var lift: Boolean = false
+    }
 
     private val fingers = LinkedHashMap<String, Finger>()
     private var generation = 0
@@ -47,12 +56,17 @@ class GestureComposer(
     fun padRelease(): Boolean = buttonUp(PAD_ID)
 
     fun buttonDown(id: String, x: Int, y: Int): Boolean = runSync {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return@runSync false
-        val finger = fingers.getOrPut(id) { Finger(id, x.toFloat(), y.toFloat()) }
-        finger.fromX = finger.x
-        finger.fromY = finger.y
-        finger.x = x.toFloat()
-        finger.y = y.toFloat()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || x < 0 || y < 0) return@runSync false
+        val fx = x.toFloat()
+        val fy = y.toFloat()
+        val existing = fingers[id]
+        if (existing != null && !existing.lift && existing.stroke != null && existing.x == fx && existing.y == fy) {
+            // 已经按在这里。再派发只会在系统队列末尾多排一段，累积延迟。
+            return@runSync true
+        }
+        val finger = existing ?: Finger(id, fx, fy).also { fingers[id] = it }
+        finger.x = fx
+        finger.y = fy
         finger.segmentMs = HOLD_SLICE_MS
         finger.lift = false
         externalRestarts = 0
@@ -68,29 +82,29 @@ class GestureComposer(
     }
 
     fun tap(x: Int, y: Int, durationMs: Long): Boolean = runSync {
+        if (x < 0 || y < 0) return@runSync false
         val duration = durationMs.coerceAtLeast(1L)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || fingers.isEmpty()) {
             return@runSync dispatchSimple(pointPath(x.toFloat(), y.toFloat()), duration)
         }
-        emit(listOf(instantStroke(pointPath(x.toFloat(), y.toFloat()), duration)))
+        emit(listOf(Instant(pointPath(x.toFloat(), y.toFloat()), duration)))
     }
 
     fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Long): Boolean = runSync {
+        if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0) return@runSync false
         val duration = durationMs.coerceAtLeast(1L)
         val path = movePath(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat())
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || fingers.isEmpty()) {
             return@runSync dispatchSimple(path, duration)
         }
-        emit(listOf(instantStroke(path, duration)))
+        emit(listOf(Instant(path, duration)))
     }
 
     fun dragBegin(x: Int, y: Int): Boolean = buttonDown(DRAG_ID, x, y)
 
     fun dragStep(x: Int, y: Int, durationMs: Long): Boolean = runSync {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return@runSync false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || x < 0 || y < 0) return@runSync false
         val finger = fingers[DRAG_ID] ?: return@runSync false
-        finger.fromX = finger.x
-        finger.fromY = finger.y
         finger.x = x.toFloat()
         finger.y = y.toFloat()
         finger.segmentMs = durationMs.coerceAtLeast(1L)
@@ -111,25 +125,38 @@ class GestureComposer(
 
     fun hasHold(): Boolean = fingers.isNotEmpty()
 
-    private fun emit(instants: List<GestureDescription.StrokeDescription> = emptyList()): Boolean {
+    private class Instant(val path: Path, val durationMs: Long)
+
+    private fun emit(instants: List<Instant> = emptyList()): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        // 从未派发过的触点抬起时不用派发，否则会变成一次多余的点按
+        fingers.values.removeAll { it.lift && it.stroke == null }
+        val continuing = fingers.values.any { it.stroke != null }
+        val freshStart = if (continuing) FRESH_STROKE_DELAY_MS else 0L
+        val instantEnd = instants.maxOfOrNull { freshStart + it.durationMs } ?: 0L
+
         val prepared = ArrayList<Pair<Finger, GestureDescription.StrokeDescription>>(fingers.size)
         for (finger in fingers.values) {
-            val path = movePath(finger.fromX, finger.fromY, finger.x, finger.y)
-            val duration = finger.segmentMs.coerceAtLeast(1L)
-            val willContinue = !finger.lift
-            val stroke = continueOrNew(finger.stroke, path, duration, willContinue)
-            prepared += finger to stroke
-            finger.fromX = finger.x
-            finger.fromY = finger.y
+            val path = movePath(finger.endX, finger.endY, finger.x, finger.y)
+            val start = if (finger.stroke == null) freshStart else 0L
+            val duration = if (finger.lift) {
+                finger.segmentMs.coerceAtLeast(1L)
+            } else {
+                // 按住的触点陪瞬时笔画一起结束，下一次派发才能紧接着排上
+                maxOf(finger.segmentMs, instantEnd - start, 1L)
+            }
+            prepared += finger to continueOrNew(finger.stroke, path, start, duration, willContinue = !finger.lift)
         }
-        val maxStrokes = GestureDescription.getMaxStrokeCount()
-        if (prepared.size + instants.size > maxStrokes || prepared.size + instants.size == 0) {
+        val total = prepared.size + instants.size
+        if (total == 0) return true
+        if (total > GestureDescription.getMaxStrokeCount()) {
             return false
         }
         val builder = GestureDescription.Builder()
         prepared.forEach { builder.addStroke(it.second) }
-        instants.forEach { builder.addStroke(it) }
+        instants.forEach {
+            builder.addStroke(GestureDescription.StrokeDescription(it.path, freshStart, it.durationMs, false))
+        }
         generation += 1
         val gen = generation
         val accepted = service.dispatchGesture(
@@ -150,6 +177,9 @@ class GestureComposer(
                 fingers.remove(finger.id)
             } else {
                 finger.stroke = stroke
+                finger.endX = finger.x
+                finger.endY = finger.y
+                finger.segmentMs = HOLD_SLICE_MS
             }
         }
         scheduleRenew()
@@ -169,6 +199,7 @@ class GestureComposer(
         emit()
     }
 
+    /** 定期续一小段，及时发现被用户触屏打断的按住。 */
     private fun scheduleRenew() {
         handler.removeCallbacks(renew)
         if (fingers.isNotEmpty()) {
@@ -179,21 +210,18 @@ class GestureComposer(
     private fun continueOrNew(
         previous: GestureDescription.StrokeDescription?,
         path: Path,
+        startMs: Long,
         duration: Long,
         willContinue: Boolean,
     ): GestureDescription.StrokeDescription {
         if (previous == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return GestureDescription.StrokeDescription(path, 0, duration, willContinue)
+            return GestureDescription.StrokeDescription(path, startMs, duration, willContinue)
         }
         return try {
             previous.continueStroke(path, 0, duration, willContinue)
         } catch (_: IllegalStateException) {
-            GestureDescription.StrokeDescription(path, 0, duration, willContinue)
+            GestureDescription.StrokeDescription(path, startMs, duration, willContinue)
         }
-    }
-
-    private fun instantStroke(path: Path, duration: Long): GestureDescription.StrokeDescription {
-        return GestureDescription.StrokeDescription(path, 0, duration, false)
     }
 
     private fun dispatchSimple(path: Path, duration: Long): Boolean {
@@ -209,6 +237,9 @@ class GestureComposer(
         val posted = handler.post {
             try {
                 result.set(block())
+            } catch (_: IllegalArgumentException) {
+                // 坐标为负等非法路径。不能让异常打到主线程 Looper 上把无障碍进程带崩
+                result.set(false)
             } finally {
                 latch.countDown()
             }
@@ -220,22 +251,27 @@ class GestureComposer(
     private companion object {
         const val PAD_ID = "pad"
         const val DRAG_ID = "drag"
-        const val HOLD_SLICE_MS = 500L
+
+        /** 按住和改变方向时每段的时长。续段排在队尾，太长会让后面的点按变慢。 */
+        const val HOLD_SLICE_MS = 30L
         const val RENEW_AFTER_MS = 400L
         const val LIFT_MS = 20L
+
+        /** 续接手势里新笔画的起始时刻，见类注释第 2 条。 */
+        const val FRESH_STROKE_DELAY_MS = 1L
         const val MAX_EXTERNAL_RESTARTS = 3
         const val SYNC_TIMEOUT_MS = 3000L
 
-        fun pointPath(x: Float, y: Float): Path = movePath(x, y, x, y)
+        /** 零长度路径由系统按点按处理，终点等于起点，便于续接。 */
+        fun pointPath(x: Float, y: Float): Path = Path().apply {
+            moveTo(x, y)
+            lineTo(x, y)
+        }
 
         fun movePath(x1: Float, y1: Float, x2: Float, y2: Float): Path {
             return Path().apply {
                 moveTo(x1, y1)
-                if (x1 == x2 && y1 == y2) {
-                    lineTo(x2 + 0.5f, y2)
-                } else {
-                    lineTo(x2, y2)
-                }
+                lineTo(x2, y2)
             }
         }
     }

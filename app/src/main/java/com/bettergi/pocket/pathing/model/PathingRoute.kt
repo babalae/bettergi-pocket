@@ -226,10 +226,10 @@ object PathingRoutes {
     private fun parseWaypoint(json: JSONObject): Waypoint {
         val ext = json.optJSONObject("point_ext_params")
         val mis = ext?.optJSONObject("misidentification")
-        val types = ArrayList<String>()
-        mis?.optJSONArray("type")?.let { array ->
-            for (i in 0 until array.length()) types += array.getString(i)
-        }
+        // 写了 type 就照写的用（包括空数组），没写才用默认 ["unrecognized"]，与 BGI 反序列化一致
+        val types = mis?.optJSONArray("type")?.let { array ->
+            List(array.length()) { array.getString(it) }
+        } ?: listOf("unrecognized")
         val actionCode = json.optString("action").takeIf { it.isNotBlank() }
         return Waypoint(
             gameX = json.optDouble("x"),
@@ -240,7 +240,7 @@ object PathingRoutes {
             actionCode = actionCode,
             actionParams = json.optString("action_params").takeIf { it.isNotBlank() },
             misidentification = Misidentification(
-                types = types.ifEmpty { listOf("unrecognized") },
+                types = types,
                 handlingMode = mis?.optString("handling_mode")?.takeIf { it.isNotBlank() } ?: "previousDetectedPoint",
             ),
         )
