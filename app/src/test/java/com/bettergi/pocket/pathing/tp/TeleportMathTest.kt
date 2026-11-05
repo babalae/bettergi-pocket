@@ -43,6 +43,36 @@ class TeleportMathTest {
     }
 
     @Test
+    fun `map center walks toward the target when recognition follows the drag`() {
+        var center = Point2f(0f, 0f)
+        val arrived = MapDrag.moveToward(
+            start = center,
+            targetX = 500.0,
+            targetY = 0.0,
+            zoom = 1.0,
+            readCenter = { predicted ->
+                center = predicted
+                predicted
+            },
+            drag = { dx, dy -> dx to dy },
+        )
+        assertTrue(kotlin.math.abs(arrived.x - 500f) < 200f)
+        assertEquals(0, MapDrag.adjustZoom(2.0, 4.0, 0.5) { steps -> 2.0 + steps * 0.5 }.let {
+            kotlin.math.abs(it - 4.0) < 0.2
+        }.let { if (it) 0 else 1 })
+    }
+
+    @Test
+    fun `icon alignment recovers a small screen offset`() {
+        assertEquals(intArrayOf(0, 1).toList(), Hungarian.assign(arrayOf(intArrayOf(1, 100), intArrayOf(100, 1))).toList())
+        val expected = listOf(MapIcon(100.0, 100.0, setOf("Teleport")))
+        val observed = listOf(MapIcon(105.0, 98.0, setOf("Teleport")))
+        val alignment = IconAlignment.align(expected, observed)
+        assertEquals(5.0, alignment.offsetX, 0.5)
+        assertEquals(-2.0, alignment.offsetY, 0.5)
+    }
+
+    @Test
     fun `slider y and click projection use the 1080p formulas`() {
         assertEquals(6.0, zoomFromSliderY(612.0), 1e-9)
         assertEquals(1.0, zoomFromSliderY(468.0), 1e-9)

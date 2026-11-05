@@ -44,8 +44,14 @@ class PathingController(
     private var runtime: PathingRuntime? = null
     private var worker: Thread? = null
 
+    private var job = Job.None
+
     fun toggleReadout() {
         synchronized(lock) {
+            if (job == Job.Route) {
+                log("路线还在执行，请先停止路线")
+                return
+            }
             val running = worker?.isAlive == true && runtime?.cancelled != true
             if (running) {
                 stopLocked()
@@ -57,6 +63,10 @@ class PathingController(
 
     fun startRoute() {
         synchronized(lock) {
+            if (job == Job.Readout) {
+                log("坐标显示还在运行，请先停止显示")
+                return
+            }
             if (worker?.isAlive == true) {
                 stopLocked()
                 return
@@ -96,6 +106,7 @@ class PathingController(
         val runtime = PathingRuntime(frames)
         this.runtime = runtime
         TaskGate.exclusiveRunning = true
+        job = Job.Readout
         onReadoutChanged(true)
         onStatus("正在加载地图…")
         val thread = Thread({
@@ -114,6 +125,7 @@ class PathingController(
                 onStatus("定位中断")
             } finally {
                 TaskGate.exclusiveRunning = false
+                job = Job.None
                 synchronized(lock) {
                     if (this.runtime === runtime) {
                         this.runtime = null
@@ -128,6 +140,7 @@ class PathingController(
             thread.start()
         } catch (e: Exception) {
             TaskGate.exclusiveRunning = false
+            job = Job.None
             this.runtime = null
             worker = null
             onReadoutChanged(false)
@@ -187,7 +200,7 @@ class PathingController(
         val runtime = PathingRuntime(frames)
         this.runtime = runtime
         TaskGate.exclusiveRunning = true
-        onRouteChanged(true)
+        job = Job.Route
         onStatus(routes.first().first)
         val thread = Thread({
             try {
@@ -237,6 +250,7 @@ class PathingController(
                 onStatus("路线中断")
             } finally {
                 TaskGate.exclusiveRunning = false
+                job = Job.None
                 synchronized(lock) {
                     if (this.runtime === runtime) this.runtime = null
                 }
@@ -249,6 +263,7 @@ class PathingController(
             thread.start()
         } catch (e: Exception) {
             TaskGate.exclusiveRunning = false
+            job = Job.None
             this.runtime = null
             worker = null
             onRouteChanged(false)
@@ -285,6 +300,8 @@ class PathingController(
         runtime?.cancel()
         worker?.interrupt()
     }
+
+    private enum class Job { None, Readout, Route }
 
     private companion object {
         const val WORKER_NAME = "PathingWorker"

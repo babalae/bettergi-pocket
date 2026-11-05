@@ -81,6 +81,103 @@ object MapDrag {
         )
     }
 
+    /**
+     * 把地图中心拖向目标。识别跳变超过 5 次就放弃，其余时候用预测中心继续。
+     * 来源：BGI `MoveMapToCore` 的迭代，缩放调整由 [adjustZoom] 单独做。
+     */
+    fun moveToward(
+        start: Point2f,
+        targetX: Double,
+        targetY: Double,
+        zoom: Double,
+        readCenter: (predicted: Point2f) -> Point2f?,
+        drag: (dx: Int, dy: Int) -> Pair<Int, Int>,
+    ): Point2f {
+        var center = start
+        var failures = 0
+        repeat(MAX_ITERATIONS) {
+            val offsetX = targetX - center.x
+            val offsetY = targetY - center.y
+            val mouseX = mouseDelta(offsetX, zoom)
+            val mouseY = mouseDelta(offsetY, zoom)
+            if (sqrt(mouseX * mouseX + mouseY * mouseY) < TOLERANCE) return center
+            val (dx, dy) = dragPixels(center, targetX, targetY, zoom)
+            val (sentX, sentY) = drag(dx, dy)
+            val predicted = predictCenter(center, sentX, sentY, zoom)
+            val observed = readCenter(predicted)
+            val expectedLen = sqrt((sentX * sentX + sentY * sentY).toDouble()) * zoom / MAP_SCALE_FACTOR
+            if (observed == null || movedAnomaly(center, predicted, observed, expectedLen)) {
+                failures++
+                if (failures > 5) {
+                    throw com.bettergi.pocket.pathing.model.HandledException("多次中心点识别失败或异常，惯性推算失效")
+                }
+                center = predicted
+            } else {
+                failures = 0
+                center = observed
+            }
+        }
+        return center
+    }
+
+    /**
+     * 缩放调整：按每格缩放量估算步数，连续两次没有更接近就停。
+     * 来源：BGI `AdjustMapZoomLevel`。手机上每格改成一次滑条拖动或捏合。
+     */
+    fun adjustZoom(
+        start: Double,
+        target: Double,
+        perStep: Double,
+        precision: Double = 0.05,
+        apply: (steps: Int) -> Double,
+    ): Double {
+        val goal = target.coerceIn(1.0, 6.0)
+        var current = start.coerceIn(1.0, 6.0)
+        var stepSize = perStep.coerceAtLeast(precision)
+        var noProgress = 0
+        while (abs(current - goal) > max(precision, stepSize * 0.75)) {
+            val direction = if (goal > current) 1 else -1
+            val steps = csRoundToInt(abs(goal - current) / stepSize).coerceIn(1, 16)
+            val before = current
+            current = apply(direction * steps).coerceIn(1.0, 6.0)
+            val delta = current - before
+            if (steps != 0 && delta != 0.0) {
+                stepSize = stepSize * 0.7 + abs(delta) / abs(steps) * 0.3
+            }
+            val stillFar = abs(delta) < precision / 2.0 ||
+                abs(goal - current) >= abs(goal - before) - precision / 2.0
+            if (stillFar) {
+                noProgress++
+                if (noProgress >= 2) break
+            } else {
+                noProgress = 0
+            }
+        }
+        return current
+    }
+
+    private fun movedAnomaly(
+        before: Point2f,
+        predicted: Point2f,
+        observed: Point2f,
+        expectedLen: Double,
+    ): Boolean {
+        val jump = distance((observed.x - predicted.x).toDouble(), (observed.y - predicted.y).toDouble())
+        val actualX = (observed.x - before.x).toDouble()
+        val actualY = (observed.y - before.y).toDouble()
+        val actualLen = distance(actualX, actualY)
+        val ratio = if (expectedLen > 0) actualLen / expectedLen else 0.0
+        val cosine = directionCos(
+            (predicted.x - before.x).toDouble(),
+            (predicted.y - before.y).toDouble(),
+            actualX,
+            actualY,
+        )
+        return isRecognitionAnomaly(expectedLen, actualLen, ratio, cosine, jump)
+    }
+
+    private fun distance(x: Double, y: Double): Double = sqrt(x * x + y * y)
+
     private fun distribute(delta: Int, steps: Int, weight: (Int) -> Double): IntArray {
         val result = IntArray(steps)
         if (steps == 0) return result
