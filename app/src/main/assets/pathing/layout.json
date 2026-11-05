@@ -1,6 +1,11 @@
 {
   "version": 1,
-  "comment": "地图追踪手机 UI 标定数据，待通过 adb 截图标定。referenceSize 为标定截图尺寸；miniMap.bbox 为小地图外接正方形，边长 = 手机小地图圆直径 × 212 / PC 1080p 小地图圆直径，中心为圆心，格式 rect(x, y, w, h)。",
+  "comment": "地图追踪手机 UI 标定数据，待通过 adb 截图标定。坐标都在 referenceSize 画布上。miniMap.bbox 为小地图外接正方形，边长 = 手机小地图圆直径 × 212 / PC 1080p 小地图圆直径，中心为圆心，格式 rect(x, y, w, h)。joystick.center 是摇杆圆心，radius 是推满时的半径。viewArea 是右侧视角滑动区。buttons 的键为 jump、drop、sprint、skill、gadget、attack、party1、party2、party3、party4。pickup 是血条右上方的拾取点。cameraGain 是视角闭环增益 c（每度多少原生像素），由标定得出。",
   "referenceSize": null,
-  "miniMap": null
+  "miniMap": null,
+  "joystick": null,
+  "viewArea": null,
+  "buttons": null,
+  "pickup": null,
+  "cameraGain": null
 }

@@ -220,6 +220,9 @@ class OverlayWindowController(
         pathingExtras = root.findViewById(R.id.overlay_pathing_extras)
         pathingChevron = root.findViewById(R.id.overlay_pathing_chevron)
         pathingStatus = root.findViewById(R.id.overlay_pathing_status)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            root.findViewById<View>(R.id.overlay_group_pathing)?.visibility = View.GONE
+        }
 
         val layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,

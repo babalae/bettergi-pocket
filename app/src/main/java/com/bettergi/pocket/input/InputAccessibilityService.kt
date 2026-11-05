@@ -1,11 +1,9 @@
 package com.bettergi.pocket.input
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.GestureDescription
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.Path
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -19,7 +17,10 @@ import android.widget.Toast
 import com.bettergi.pocket.genshin.GenshinPackages
 
 class InputAccessibilityService : AccessibilityService() {
+    private var composer: GestureComposer? = null
+
     override fun onServiceConnected() {
+        composer = GestureComposer(this)
         instance = this
         Log.i(TAG, "accessibility service connected")
         notifyStateChanged()
@@ -46,6 +47,8 @@ class InputAccessibilityService : AccessibilityService() {
 
     private fun clearInstance() {
         if (instance === this) {
+            composer?.releaseAll()
+            composer = null
             instance = null
             lastAppPackage = null
             notifyStateChanged()
@@ -64,10 +67,23 @@ class InputAccessibilityService : AccessibilityService() {
         private const val AUTHORITY_SUFFIX = ".a11y"
         private const val METHOD_STATUS = "status"
         private const val METHOD_CLICK = "click"
+        private const val METHOD_PAD_HOLD = "pad.hold"
+        private const val METHOD_PAD_RELEASE = "pad.release"
+        private const val METHOD_BUTTON_DOWN = "button.down"
+        private const val METHOD_BUTTON_UP = "button.up"
+        private const val METHOD_TAP = "tap"
+        private const val METHOD_SWIPE = "swipe"
+        private const val METHOD_DRAG_BEGIN = "drag.begin"
+        private const val METHOD_DRAG_STEP = "drag.step"
+        private const val METHOD_DRAG_END = "drag.end"
+        private const val METHOD_RELEASE_ALL = "releaseAll"
         private const val KEY_CONNECTED = "connected"
         private const val KEY_LAST_PACKAGE = "last_package"
         private const val KEY_X = "x"
         private const val KEY_Y = "y"
+        private const val KEY_X2 = "x2"
+        private const val KEY_Y2 = "y2"
+        private const val KEY_ID = "id"
         private const val KEY_DURATION = "duration"
         private const val KEY_OK = "ok"
         private const val BIND_GRACE_MS = 2000L
@@ -203,19 +219,81 @@ class InputAccessibilityService : AccessibilityService() {
                     putBoolean(KEY_CONNECTED, instance != null)
                     putString(KEY_LAST_PACKAGE, lastAppPackage)
                 }
-                METHOD_CLICK -> Bundle().apply {
-                    putBoolean(
-                        KEY_OK,
-                        clickLocal(
-                            extras?.getInt(KEY_X) ?: 0,
-                            extras?.getInt(KEY_Y) ?: 0,
-                            extras?.getLong(KEY_DURATION, 50L) ?: 50L,
-                        ),
-                    )
-                }
+                METHOD_CLICK -> okBundle(
+                    clickLocal(
+                        extras.int(KEY_X),
+                        extras.int(KEY_Y),
+                        extras.long(KEY_DURATION, 50L),
+                    ),
+                )
+                METHOD_PAD_HOLD -> okBundle(composer()?.padHold(extras.int(KEY_X), extras.int(KEY_Y)) == true)
+                METHOD_PAD_RELEASE -> okBundle(composer()?.padRelease() == true)
+                METHOD_BUTTON_DOWN -> okBundle(
+                    composer()?.buttonDown(extras.string(KEY_ID), extras.int(KEY_X), extras.int(KEY_Y)) == true,
+                )
+                METHOD_BUTTON_UP -> okBundle(composer()?.buttonUp(extras.string(KEY_ID)) == true)
+                METHOD_TAP -> okBundle(
+                    composer()?.tap(extras.int(KEY_X), extras.int(KEY_Y), extras.long(KEY_DURATION, 50L)) == true,
+                )
+                METHOD_SWIPE -> okBundle(
+                    composer()?.swipe(
+                        extras.int(KEY_X),
+                        extras.int(KEY_Y),
+                        extras.int(KEY_X2),
+                        extras.int(KEY_Y2),
+                        extras.long(KEY_DURATION, 80L),
+                    ) == true,
+                )
+                METHOD_DRAG_BEGIN -> okBundle(composer()?.dragBegin(extras.int(KEY_X), extras.int(KEY_Y)) == true)
+                METHOD_DRAG_STEP -> okBundle(
+                    composer()?.dragStep(extras.int(KEY_X), extras.int(KEY_Y), extras.long(KEY_DURATION, 20L)) == true,
+                )
+                METHOD_DRAG_END -> okBundle(composer()?.dragEnd() == true)
+                METHOD_RELEASE_ALL -> okBundle(composer()?.releaseAll() == true)
                 else -> Bundle()
             }
         }
+
+        fun padHold(x: Int, y: Int): Boolean = call(METHOD_PAD_HOLD, pointBundle(x, y)) { it.padHold(x, y) }
+
+        fun padRelease(): Boolean = call(METHOD_PAD_RELEASE) { it.padRelease() }
+
+        fun buttonDown(id: String, x: Int, y: Int): Boolean {
+            return call(METHOD_BUTTON_DOWN, pointBundle(x, y).apply { putString(KEY_ID, id) }) {
+                it.buttonDown(id, x, y)
+            }
+        }
+
+        fun buttonUp(id: String): Boolean {
+            return call(METHOD_BUTTON_UP, Bundle().apply { putString(KEY_ID, id) }) { it.buttonUp(id) }
+        }
+
+        fun tap(x: Int, y: Int, durationMs: Long): Boolean {
+            return call(METHOD_TAP, pointBundle(x, y).apply { putLong(KEY_DURATION, durationMs) }) {
+                it.tap(x, y, durationMs)
+            }
+        }
+
+        fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Long): Boolean {
+            val extras = pointBundle(x1, y1).apply {
+                putInt(KEY_X2, x2)
+                putInt(KEY_Y2, y2)
+                putLong(KEY_DURATION, durationMs)
+            }
+            return call(METHOD_SWIPE, extras) { it.swipe(x1, y1, x2, y2, durationMs) }
+        }
+
+        fun dragBegin(x: Int, y: Int): Boolean = call(METHOD_DRAG_BEGIN, pointBundle(x, y)) { it.dragBegin(x, y) }
+
+        fun dragStep(x: Int, y: Int, durationMs: Long): Boolean {
+            return call(METHOD_DRAG_STEP, pointBundle(x, y).apply { putLong(KEY_DURATION, durationMs) }) {
+                it.dragStep(x, y, durationMs)
+            }
+        }
+
+        fun dragEnd(): Boolean = call(METHOD_DRAG_END) { it.dragEnd() }
+
+        fun releaseAllTouches(): Boolean = call(METHOD_RELEASE_ALL) { it.releaseAll() }
 
         private fun currentStatus(): Pair<Boolean, String?> {
             if (instance != null) return true to lastAppPackage
@@ -224,12 +302,33 @@ class InputAccessibilityService : AccessibilityService() {
         }
 
         private fun clickLocal(x: Int, y: Int, durationMs: Long): Boolean {
-            val service = instance ?: return false
-            val path = Path().apply { moveTo(x.toFloat(), y.toFloat()) }
-            val stroke = GestureDescription.StrokeDescription(path, 0, durationMs.coerceAtLeast(1L))
-            val gesture = GestureDescription.Builder().addStroke(stroke).build()
-            return service.dispatchGesture(gesture, null, null)
+            return composer()?.tap(x, y, durationMs) == true
         }
+
+        private fun composer(): GestureComposer? = instance?.composer
+
+        private fun call(
+            method: String,
+            extras: Bundle? = null,
+            local: (GestureComposer) -> Boolean,
+        ): Boolean {
+            val localComposer = composer()
+            if (localComposer != null) return local(localComposer)
+            return remoteCall(method, extras)?.getBoolean(KEY_OK, false) == true
+        }
+
+        private fun okBundle(ok: Boolean): Bundle = Bundle().apply { putBoolean(KEY_OK, ok) }
+
+        private fun pointBundle(x: Int, y: Int): Bundle = Bundle().apply {
+            putInt(KEY_X, x)
+            putInt(KEY_Y, y)
+        }
+
+        private fun Bundle?.int(key: String): Int = this?.getInt(key) ?: 0
+
+        private fun Bundle?.long(key: String, default: Long): Long = this?.getLong(key, default) ?: default
+
+        private fun Bundle?.string(key: String): String = this?.getString(key).orEmpty()
 
         private fun remoteStatus(): Bundle? = remoteCall(METHOD_STATUS)
 

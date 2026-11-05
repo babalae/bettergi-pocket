@@ -19,13 +19,51 @@ import org.json.JSONObject
  * {
  *   "version": 1,
  *   "referenceSize": [3040, 1904],
- *   "miniMap": { "bbox": "rect(x, y, w, h)", "anchor": "Auto" }
+ *   "miniMap": { "bbox": "rect(x, y, w, h)", "anchor": "Auto" },
+ *   "joystick": { "center": [x, y], "radius": 160 },
+ *   "viewArea": { "bbox": "rect(x, y, w, h)" },
+ *   "buttons": { "jump": [x, y], "sprint": [x, y] },
+ *   "pickup": [x, y],
+ *   "cameraGain": 1.2
  * }
  * ```
  */
+data class ControlPoint(val x: Int, val y: Int)
+
+data class JoystickLayout(val centerX: Int, val centerY: Int, val radius: Int)
+
+data class ViewAreaLayout(
+    val bbox: IntRect,
+    val anchorMode: SearchAnchorMode = SearchAnchorMode.Auto,
+)
+
+enum class GameButton(val id: String) {
+    Jump("jump"),
+    Drop("drop"),
+    Sprint("sprint"),
+    Skill("skill"),
+    Gadget("gadget"),
+    Attack("attack"),
+    Party1("party1"),
+    Party2("party2"),
+    Party3("party3"),
+    Party4("party4"),
+    ;
+
+    companion object {
+        fun fromId(id: String): GameButton? = entries.firstOrNull { it.id == id }
+    }
+}
+
 data class PathingLayout(
     val referenceSize: IntSize?,
     val miniMap: MiniMapLayout?,
+    val joystick: JoystickLayout? = null,
+    val viewArea: ViewAreaLayout? = null,
+    val buttons: Map<GameButton, ControlPoint> = emptyMap(),
+    val pickup: ControlPoint? = null,
+    /** 视角闭环增益 c，单位是每度多少原生像素。未测定时为 null。 */
+    val cameraGain: Double? = null,
 ) {
     companion object {
         const val FILE_NAME = "layout.json"
@@ -46,7 +84,36 @@ data class PathingLayout(
             } else {
                 null
             }
-            return PathingLayout(referenceSize, miniMap)
+            val joystick = root.optJSONObject("joystick")?.let { json ->
+                val center = json.optJSONArray("center") ?: return@let null
+                JoystickLayout(center.getInt(0), center.getInt(1), json.getInt("radius"))
+            }
+            val viewArea = root.optJSONObject("viewArea")?.let { json ->
+                ViewAreaLayout(
+                    bbox = parseRect(json.getString("bbox")),
+                    anchorMode = json.optString("anchor", SearchAnchorMode.Auto.name)
+                        .let { SearchAnchorMode.valueOf(it) },
+                )
+            }
+            val buttons = HashMap<GameButton, ControlPoint>()
+            root.optJSONObject("buttons")?.let { json ->
+                for (key in json.keys()) {
+                    val button = GameButton.fromId(key) ?: continue
+                    buttons[button] = parsePoint(json.getJSONArray(key))
+                }
+            }
+            val pickup = root.optJSONArray("pickup")?.let(::parsePoint)
+            val cameraGain = if (root.has("cameraGain") && !root.isNull("cameraGain")) {
+                root.getDouble("cameraGain")
+            } else {
+                null
+            }
+            return PathingLayout(referenceSize, miniMap, joystick, viewArea, buttons, pickup, cameraGain)
+        }
+
+        private fun parsePoint(array: JSONArray): ControlPoint {
+            require(array.length() == 2) { "坐标必须是 [x, y]" }
+            return ControlPoint(array.getInt(0), array.getInt(1))
         }
 
         private fun parseSize(array: JSONArray): IntSize {
