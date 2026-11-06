@@ -80,6 +80,14 @@ class PassthroughTouchClient(
         ok
     }
 
+    override fun pinch(centerX: Int, centerY: Int, startSpan: Int, endSpan: Int, durationMs: Long): Boolean = onMain {
+        val radius = (maxOf(startSpan, endSpan) + 1) / 2
+        val armed = overlay.prepareAreaPassthrough(centerX - radius, centerY, centerX + radius, centerY)
+        val ok = delegate.pinch(centerX, centerY, startSpan, endSpan, durationMs)
+        if (armed) scheduleRestore(if (ok) durationMs + RESTORE_DELAY_MS else 0L)
+        ok
+    }
+
     override fun dragStep(x: Int, y: Int, durationMs: Long): Boolean = onMain {
         if (!dragArmed && overlay.prepareAreaPassthrough(lastDragX, lastDragY, x, y)) {
             dragArmed = true
@@ -105,6 +113,27 @@ class PassthroughTouchClient(
 
     override fun releaseAll(): Boolean = onMain {
         val ok = delegate.releaseAll()
+        restoreHolds()
+        ok
+    }
+
+    override fun releaseAllAndWait(timeoutMs: Long): Boolean {
+        if (Looper.myLooper() == main.looper) {
+            releaseAll()
+            return false
+        }
+        var interrupted = Thread.interrupted()
+        try {
+            // 不占住应用主线程；实际抬手完成后再恢复悬浮窗的触摸拦截。
+            val ok = delegate.releaseAllAndWait(timeoutMs)
+            interrupted = Thread.interrupted() || interrupted
+            return onMain { restoreHolds(); true } && ok
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt()
+        }
+    }
+
+    private fun restoreHolds() {
         var armed = armedButtons.size
         armedButtons.clear()
         if (holdArmed) {
@@ -116,7 +145,6 @@ class PassthroughTouchClient(
             armed++
         }
         repeat(armed) { overlay.restoreClickPassthrough() }
-        ok
     }
 
     private fun scheduleRestore(delayMs: Long) {

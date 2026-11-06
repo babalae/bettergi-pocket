@@ -1,6 +1,7 @@
 package com.bettergi.pocket.pathing.model
 
 import com.bettergi.pocket.pathing.PathingTestData
+import com.bettergi.pocket.pathing.map.MapMatchingMethod
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -9,6 +10,22 @@ import org.junit.BeforeClass
 import org.junit.Test
 
 class PathingRouteTest {
+    @Test
+    fun `resolved route uses the chosen method for every tracked point even after segments were cached`() {
+        val route = PathingRoutes.parse(
+            """{"positions":[{"x":10,"y":-20,"type":"target"}]}""",
+        )
+        assertNull(route.segments.single().single().mapMatchMethod)
+        for (default in MapMatchingMethod.entries) {
+            val resolved = route.withMatchingMethod(default)
+            val point = resolved.segments.single().single()
+            assertEquals(default.value, point.mapMatchMethod)
+            assertEquals(32748.0, point.imageX, 0.001)
+            assertEquals(24616.0, point.imageY, 0.001)
+        }
+        assertNull(route.mapMatchMethod)
+    }
+
     @Test
     fun `parses snake case routes and splits on teleport points`() {
         val route = PathingRoutes.parse(

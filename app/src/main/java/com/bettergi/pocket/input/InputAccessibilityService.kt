@@ -43,7 +43,9 @@ class InputAccessibilityService : AccessibilityService() {
         lastAppPackage = pkg
     }
 
-    override fun onInterrupt() = Unit
+    override fun onInterrupt() {
+        composer?.releaseAll()
+    }
 
     private fun clearInstance() {
         if (instance === this) {
@@ -73,10 +75,14 @@ class InputAccessibilityService : AccessibilityService() {
         private const val METHOD_BUTTON_UP = "button.up"
         private const val METHOD_TAP = "tap"
         private const val METHOD_SWIPE = "swipe"
+        private const val METHOD_PINCH = "pinch"
+        private const val KEY_START_SPAN = "start_span"
+        private const val KEY_END_SPAN = "end_span"
         private const val METHOD_DRAG_BEGIN = "drag.begin"
         private const val METHOD_DRAG_STEP = "drag.step"
         private const val METHOD_DRAG_END = "drag.end"
         private const val METHOD_RELEASE_ALL = "releaseAll"
+        private const val METHOD_RELEASE_ALL_AND_WAIT = "releaseAllAndWait"
         private const val KEY_CONNECTED = "connected"
         private const val KEY_LAST_PACKAGE = "last_package"
         private const val KEY_X = "x"
@@ -285,12 +291,21 @@ class InputAccessibilityService : AccessibilityService() {
                         extras.long(KEY_DURATION, 80L),
                     ) == true,
                 )
+                METHOD_PINCH -> okBundle(
+                    composer()?.pinch(
+                        extras.int(KEY_X), extras.int(KEY_Y),
+                        extras.int(KEY_START_SPAN), extras.int(KEY_END_SPAN), extras.long(KEY_DURATION, 400L),
+                    ) == true,
+                )
                 METHOD_DRAG_BEGIN -> okBundle(composer()?.dragBegin(extras.int(KEY_X), extras.int(KEY_Y)) == true)
                 METHOD_DRAG_STEP -> okBundle(
                     composer()?.dragStep(extras.int(KEY_X), extras.int(KEY_Y), extras.long(KEY_DURATION, 20L)) == true,
                 )
                 METHOD_DRAG_END -> okBundle(composer()?.dragEnd() == true)
                 METHOD_RELEASE_ALL -> okBundle(composer()?.releaseAll() == true)
+                METHOD_RELEASE_ALL_AND_WAIT -> okBundle(
+                    composer()?.releaseAllAndWait(extras.long(KEY_DURATION, 3000L)) == true,
+                )
                 else -> Bundle()
             }
         }
@@ -326,6 +341,15 @@ class InputAccessibilityService : AccessibilityService() {
 
         fun dragBegin(x: Int, y: Int): Boolean = call(METHOD_DRAG_BEGIN, pointBundle(x, y)) { it.dragBegin(x, y) }
 
+        fun pinch(centerX: Int, centerY: Int, startSpan: Int, endSpan: Int, durationMs: Long): Boolean {
+            val extras = pointBundle(centerX, centerY).apply {
+                putInt(KEY_START_SPAN, startSpan)
+                putInt(KEY_END_SPAN, endSpan)
+                putLong(KEY_DURATION, durationMs)
+            }
+            return call(METHOD_PINCH, extras) { it.pinch(centerX, centerY, startSpan, endSpan, durationMs) }
+        }
+
         fun dragStep(x: Int, y: Int, durationMs: Long): Boolean {
             return call(METHOD_DRAG_STEP, pointBundle(x, y).apply { putLong(KEY_DURATION, durationMs) }) {
                 it.dragStep(x, y, durationMs)
@@ -335,6 +359,11 @@ class InputAccessibilityService : AccessibilityService() {
         fun dragEnd(): Boolean = call(METHOD_DRAG_END) { it.dragEnd() }
 
         fun releaseAllTouches(): Boolean = call(METHOD_RELEASE_ALL) { it.releaseAll() }
+
+        /** ContentProvider 的 Binder 线程等待，不能把等待转发到无障碍主线程。 */
+        fun releaseAllTouchesAndWait(timeoutMs: Long): Boolean = call(
+            METHOD_RELEASE_ALL_AND_WAIT, Bundle().apply { putLong(KEY_DURATION, timeoutMs) },
+        ) { it.releaseAllAndWait(timeoutMs) }
 
         private fun clickLocal(x: Int, y: Int, durationMs: Long): Boolean {
             return composer()?.tap(x, y, durationMs) == true

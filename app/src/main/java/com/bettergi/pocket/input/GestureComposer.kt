@@ -6,6 +6,7 @@ import android.graphics.Path
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -26,10 +27,13 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 4. 等待上一手势的完成回调后才派发下一段。尤其不能用下一个 80 ms 视角滑动
  *    打断还没结束的滑动；Android 16 会因此残留注入触点，并拒绝后续 DOWN/MOVE。
  */
-class GestureComposer(
-    private val service: AccessibilityService,
-    private val handler: Handler = Handler(Looper.getMainLooper()),
+class GestureComposer internal constructor(
+    private val handler: Handler,
+    private val dispatchGesture: (GestureDescription, AccessibilityService.GestureResultCallback?, Handler?) -> Boolean,
 ) {
+    constructor(service: AccessibilityService, handler: Handler = Handler(Looper.getMainLooper())) :
+        this(handler, service::dispatchGesture)
+
     private class Finger(
         val id: String,
         /** 目标位置。 */
@@ -49,7 +53,20 @@ class GestureComposer(
     private var externalRestarts = 0
     private var dispatching = false
     private var pendingHoldChange = false
-    private val pendingInstants = ArrayDeque<Instant>()
+    private val pendingInstants = ArrayDeque<List<Instant>>()
+    private var releasing = false
+    private var releaseFailed = false
+    private var releaseUncertain = false
+    private val releaseWaiters = ArrayList<ReleaseWaiter>()
+
+    private class ReleaseWaiter {
+        val done = CountDownLatch(1)
+        var success = false
+        fun complete(ok: Boolean) {
+            success = ok
+            done.countDown()
+        }
+    }
 
     private val renew = Runnable {
         if (fingers.any { !it.value.lift }) {
@@ -62,10 +79,12 @@ class GestureComposer(
     fun padRelease(): Boolean = buttonUp(PAD_ID)
 
     fun buttonDown(id: String, x: Int, y: Int): Boolean = runSync {
+        if (releasing || releaseFailed) return@runSync false
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || x < 0 || y < 0) return@runSync false
         val fx = x.toFloat()
         val fy = y.toFloat()
-        val existing = fingers[id]
+        // 已提交抬起的旧笔画仍保留到回调；同号新触点必须等它完成后重新按下。
+        val existing = fingers[id]?.takeUnless { it.lift }
         if (existing != null && !existing.lift && existing.stroke != null && existing.x == fx && existing.y == fy) {
             // 已经按在这里。再派发只会在系统队列末尾多排一段，累积延迟。
             return@runSync true
@@ -80,6 +99,7 @@ class GestureComposer(
     }
 
     fun buttonUp(id: String): Boolean = runSync {
+        if (releasing || releaseFailed) return@runSync false
         val finger = fingers[id] ?: return@runSync true
         finger.segmentMs = LIFT_MS
         finger.lift = true
@@ -88,6 +108,7 @@ class GestureComposer(
     }
 
     fun tap(x: Int, y: Int, durationMs: Long): Boolean = runSync {
+        if (releasing || releaseFailed) return@runSync false
         if (x < 0 || y < 0) return@runSync false
         val duration = durationMs.coerceAtLeast(1L)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
@@ -97,6 +118,7 @@ class GestureComposer(
     }
 
     fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Long): Boolean = runSync {
+        if (releasing || releaseFailed) return@runSync false
         if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0) return@runSync false
         val duration = durationMs.coerceAtLeast(1L)
         val path = movePath(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat())
@@ -108,7 +130,22 @@ class GestureComposer(
 
     fun dragBegin(x: Int, y: Int): Boolean = buttonDown(DRAG_ID, x, y)
 
+    /** 两根手指在同一次派发中同步开合；不能拆成两次 swipe，否则会互相取消。 */
+    fun pinch(centerX: Int, centerY: Int, startSpan: Int, endSpan: Int, durationMs: Long): Boolean = runSync {
+        if (releasing || releaseFailed || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return@runSync false
+        val radius = maxOf(startSpan, endSpan) / 2f
+        if (startSpan <= 0 || endSpan <= 0 || centerX < radius || centerY < 0) return@runSync false
+        val start = startSpan / 2f
+        val end = endSpan / 2f
+        val duration = durationMs.coerceAtLeast(1L)
+        emit(listOf(
+            Instant(movePath(centerX - start, centerY.toFloat(), centerX - end, centerY.toFloat()), duration),
+            Instant(movePath(centerX + start, centerY.toFloat(), centerX + end, centerY.toFloat()), duration),
+        ))
+    }
+
     fun dragStep(x: Int, y: Int, durationMs: Long): Boolean = runSync {
+        if (releasing || releaseFailed) return@runSync false
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || x < 0 || y < 0) return@runSync false
         val finger = fingers[DRAG_ID] ?: return@runSync false
         finger.x = x.toFloat()
@@ -120,16 +157,83 @@ class GestureComposer(
 
     fun dragEnd(): Boolean = buttonUp(DRAG_ID)
 
-    fun releaseAll(): Boolean = runSync {
+    fun releaseAll(): Boolean = runSync { beginRelease() }
+
+    /** 只在工作线程等待；主线程继续处理抬手回调。中断不跳过清理，返回后恢复中断位。 */
+    fun releaseAllAndWait(timeoutMs: Long = SYNC_TIMEOUT_MS): Boolean {
+        if (Looper.myLooper() == handler.looper) {
+            releaseAll()
+            return false
+        }
+        val waiter = ReleaseWaiter()
+        if (!handler.post { beginRelease(waiter) }) return false
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs.coerceIn(1L, SYNC_TIMEOUT_MS)
+        var interrupted = false
+        try {
+            while (waiter.done.count != 0L) {
+                val remaining = deadline - SystemClock.elapsedRealtime()
+                if (remaining <= 0L) {
+                    handler.post {
+                        if (releaseWaiters.contains(waiter)) finishRelease(false)
+                    }
+                    return false
+                }
+                try {
+                    waiter.done.await(remaining, TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    interrupted = true
+                }
+            }
+            return waiter.success
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt()
+        }
+    }
+
+    private fun beginRelease(waiter: ReleaseWaiter? = null): Boolean {
+        waiter?.let(releaseWaiters::add)
         // 停止后不再执行排队的点按或转向；正在执行的笔画完成后立即松开持续触点。
         pendingInstants.clear()
         handler.removeCallbacks(renew)
-        if (fingers.isEmpty()) return@runSync true
+        if (releaseUncertain) {
+            finishRelease(false)
+            return false
+        }
+        if (!dispatching && fingers.isEmpty()) {
+            // 已取消/超时且失去笔画记录时，不能把空列表误报成系统释放成功。
+            val ok = !releaseFailed
+            finishRelease(ok)
+            return ok
+        }
+        releasing = true
         fingers.values.forEach {
             it.lift = true
             it.segmentMs = LIFT_MS
+            // 丢弃尚未提交的摇杆/视角移动，在最后派发的终点原地抬起。
+            it.x = it.endX
+            it.y = it.endY
         }
-        emit()
+        return emitRelease()
+    }
+
+    private fun emitRelease(): Boolean {
+        return try {
+            emit()
+        } catch (e: RuntimeException) {
+            Log.w("BetterGI.Gesture", "无法续接抬手笔画", e)
+            releaseUncertain = true
+            finishRelease(false)
+            false
+        }
+    }
+
+    private fun finishRelease(success: Boolean) {
+        releasing = false
+        releaseFailed = !success
+        if (!success) Log.w("BetterGI.Gesture", "触点释放未确认，暂停后续手势")
+        val waiters = releaseWaiters.toList()
+        releaseWaiters.clear()
+        waiters.forEach { it.complete(success) }
     }
 
     fun hasHold(): Boolean = fingers.isNotEmpty()
@@ -139,7 +243,7 @@ class GestureComposer(
     private fun emit(instants: List<Instant> = emptyList()): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
         if (dispatching) {
-            pendingInstants.addAll(instants)
+            if (instants.isNotEmpty()) pendingInstants.addLast(instants)
             pendingHoldChange = true
             return true
         }
@@ -149,7 +253,10 @@ class GestureComposer(
         // willContinue 本身已保留按住状态，只在移动、新增、抬起或有瞬时动作时续接。
         if (instants.isEmpty() && fingers.values.none {
                 it.stroke == null || it.lift || it.x != it.endX || it.y != it.endY
-            }) return true
+            }) {
+            if (releasing && !dispatching && fingers.isEmpty()) finishRelease(true)
+            return true
+        }
         val continuing = fingers.values.any { it.stroke != null }
         val freshStart = if (continuing) FRESH_STROKE_DELAY_MS else 0L
         val instantEnd = instants.maxOfOrNull { freshStart + it.durationMs } ?: 0L
@@ -169,6 +276,7 @@ class GestureComposer(
         val total = prepared.size + instants.size
         if (total == 0) return true
         if (total > GestureDescription.getMaxStrokeCount()) {
+            if (releasing) finishRelease(false)
             return false
         }
         val builder = GestureDescription.Builder()
@@ -179,11 +287,12 @@ class GestureComposer(
         generation += 1
         val gen = generation
         dispatching = true
-        val accepted = service.dispatchGesture(
+        val lifted = prepared.filter { it.first.lift }
+        val accepted = dispatchGesture(
             builder.build(),
             object : AccessibilityService.GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
-                    handler.post { onDispatchCompleted(gen) }
+                    handler.post { onDispatchCompleted(gen, lifted) }
                 }
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
@@ -194,31 +303,41 @@ class GestureComposer(
         )
         if (!accepted) {
             dispatching = false
-            prepared.forEach { it.first.stroke = null }
+            // 拒绝提交时旧笔画仍可能按住，保留记录供再次释放，不能直接清空。
+            if (releasing) finishRelease(false)
             return false
         }
         prepared.forEach { (finger, stroke) ->
-            if (finger.lift) {
-                fingers.remove(finger.id)
-            } else {
-                finger.stroke = stroke
-                finger.endX = finger.x
-                finger.endY = finger.y
-                finger.segmentMs = HOLD_SLICE_MS
-            }
+            // 抬手也要等 onCompleted 才移除，否则取消和等待都会误判为空闲。
+            finger.stroke = stroke
+            finger.endX = finger.x
+            finger.endY = finger.y
+            finger.segmentMs = if (finger.lift) LIFT_MS else HOLD_SLICE_MS
         }
         scheduleRenew()
         return true
     }
 
     /** 连续笔画在完成后仍按下；只在系统确认完成后消费下一个瞬时动作或触点更新。 */
-    private fun onDispatchCompleted(gen: Int) {
+    private fun onDispatchCompleted(
+        gen: Int,
+        lifted: List<Pair<Finger, GestureDescription.StrokeDescription>> = emptyList(),
+    ) {
         if (gen != generation) return
         dispatching = false
+        lifted.forEach { (finger, stroke) ->
+            if (fingers[finger.id] === finger && finger.stroke === stroke) fingers.remove(finger.id)
+        }
+        if (releasing || releaseFailed) {
+            pendingInstants.clear()
+            pendingHoldChange = false
+            if (fingers.isEmpty()) finishRelease(true) else emitRelease()
+            return
+        }
         val instant = pendingInstants.removeFirstOrNull()
         if (instant != null || pendingHoldChange) {
             pendingHoldChange = false
-            emit(if (instant == null) emptyList() else listOf(instant))
+            emit(instant ?: emptyList())
         }
     }
 
@@ -227,6 +346,13 @@ class GestureComposer(
         dispatching = false
         pendingInstants.clear()
         pendingHoldChange = false
+        if (releasing || releaseFailed || fingers.values.any { it.lift }) {
+            // 清理被取消不能重建按住，也不能把取消回调当作抬手完成。
+            handler.removeCallbacks(renew)
+            releaseUncertain = true
+            finishRelease(false)
+            return
+        }
         Log.w("BetterGI.Gesture", "手势被取消，重建持续触点 count=${fingers.size}")
         fingers.values.forEach { it.stroke = null }
         if (fingers.isEmpty()) return
@@ -234,6 +360,8 @@ class GestureComposer(
         if (externalRestarts > MAX_EXTERNAL_RESTARTS) {
             fingers.clear()
             handler.removeCallbacks(renew)
+            releaseUncertain = true
+            finishRelease(false)
             return
         }
         emit()
@@ -259,15 +387,29 @@ class GestureComposer(
         }
         return try {
             previous.continueStroke(path, 0, duration, willContinue)
-        } catch (_: IllegalStateException) {
+        } catch (e: IllegalStateException) {
+            // 清理中的笔画不能续接时不能退化为新点按，否则会在原落点又点一次。
+            if (releasing || releaseFailed) throw e
             GestureDescription.StrokeDescription(path, startMs, duration, willContinue)
         }
     }
 
     private fun dispatchSimple(path: Path, duration: Long): Boolean {
+        if (dispatching) return false
         val stroke = GestureDescription.StrokeDescription(path, 0, duration)
         val gesture = GestureDescription.Builder().addStroke(stroke).build()
-        return service.dispatchGesture(gesture, null, null)
+        val gen = ++generation
+        dispatching = true
+        val accepted = dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) {
+                handler.post { onDispatchCompleted(gen) }
+            }
+            override fun onCancelled(gestureDescription: GestureDescription?) {
+                handler.post { onExternalCancel(gen) }
+            }
+        }, handler)
+        if (!accepted) dispatching = false
+        return accepted
     }
 
     private fun runSync(block: () -> Boolean): Boolean {

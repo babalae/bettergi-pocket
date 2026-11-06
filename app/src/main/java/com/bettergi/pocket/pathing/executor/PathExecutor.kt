@@ -24,12 +24,13 @@ import com.bettergi.pocket.pathing.settings.PathingSettings
 import com.bettergi.pocket.pathing.tp.PathingTeleport
 import com.bettergi.pocket.pathing.vision.MotionStatus
 import com.bettergi.pocket.pathing.vision.PathingVision
+import com.bettergi.pocket.pathing.party.PathingParty
 import java.util.concurrent.CancellationException
 import kotlin.math.abs
 import org.opencv.core.Mat
 
 /**
- * 路线主循环。删除项（切队、回血、赶路、月卡、结束条件）不再进入循环。
+ * 路线主循环。早期删除项（切队、回血、赶路、月卡、结束条件）不再进入循环；现已恢复队伍内切人和生存位战技。
  * 来源：BGI `PathExecutor`。
  */
 class PathExecutor(
@@ -41,6 +42,7 @@ class PathExecutor(
     private val teleport: PathingTeleport,
     private val log: (String) -> Unit,
     private val nowMs: () -> Long = { SystemClock.elapsedRealtime() },
+    private val party: PathingParty? = null,
 ) {
     private val rotate = CameraRotateTask(runtime, input, locator, log)
     private val trap = TrapEscaper(runtime, input, rotate, vision, ::locate, log, nowMs)
@@ -54,18 +56,25 @@ class PathExecutor(
     private var lastGadgetAtMs = 0L
     private var lastPickupAtMs = 0L
     private var pickupWarned = false
+    private var routeActions: Set<PathAction> = emptySet()
 
     fun execute(route: PathingRoute): PathingResult {
         if (route.waypoints.isEmpty()) {
             return PathingResult(false, "路线没有路径点，未执行。")
         }
         PathingRoutes.rejectionReason(route)?.let { return PathingResult(false, it) }
+        routeActions = route.waypoints.mapNotNull { it.action }.toSet()
+        if (routeActions.any { PathingParty.elementFor(it) != null } && party == null) {
+            return PathingResult(false, "元素采集需要启用队伍识别")
+        }
 
-        val segments = PathingRoutes.segment(route)
+        val resolvedRoute = route.withMatchingMethod(settings.mapMatchingMethod)
+        log("小地图匹配方式：${resolvedRoute.mapMatchMethod}")
+        val segments = PathingRoutes.segment(resolvedRoute)
         runtime.delay(100)
         // BGI 只在第一次加载，之后只重置上一位置。地图数据由调用方在整个任务结束时释放
-        Navigation.warmUp(route.mapMatchMethod)
-        val map = MapManager.getMap(route.mapName, route.mapMatchMethod)
+        Navigation.warmUp(resolvedRoute.mapMatchMethod)
+        val map = MapManager.getMap(resolvedRoute.mapName, resolvedRoute.mapMatchMethod)
         return runSegments(segments, map)
     }
 
@@ -102,6 +111,7 @@ class PathExecutor(
                             }
                             teleportTo(waypoint, map)
                         } else {
+                            party?.prepare(routeActions)
                             beforeMove(waypoint)
                             if (waypoint.kind == WaypointKind.Orientation) {
                                 faceTo(waypoint)
@@ -172,6 +182,7 @@ class PathExecutor(
         val image = map.convertGenshinMapCoordinatesToImageCoordinates(arrived)
         Navigation.setPrevPosition(image.x, image.y)
         runtime.delay(500)
+        party?.invalidate()
     }
 
     private fun faceTo(waypoint: WaypointForTrack) {
@@ -183,6 +194,7 @@ class PathExecutor(
     }
 
     private fun moveTo(waypoint: WaypointForTrack) {
+        if (waypoint.moveMode !in listOf(MoveMode.Fly, MoveMode.Climb, MoveMode.Swim)) party?.walk()
         var sample = sample(waypoint)
         var position = sample.point
         var extraMs = sample.extraMs
@@ -261,6 +273,11 @@ class PathExecutor(
                     }
                 }
                 val target = Navigation.getTargetOrientation(waypoint.imageX, waypoint.imageY, position)
+                if (distance > 10 && waypoint.moveMode == MoveMode.Walk && party?.renewGuardian() == true) {
+                    // 战技会暂停移动并改变朝向，下一帧重新定位、转向。
+                    input.holdForward()
+                    continue
+                }
                 val diff = if (miniMap != null) rotate.rotateToApproach(target, miniMap) else 0f
                 if (nowMs() - started > 2_000L && frame >= 5) {
                     if (abs(diff) > 5f) {
@@ -312,7 +329,8 @@ class PathExecutor(
                         }
                     }
                 }
-                if (settings.useGadgetIntervalMs > 0 && nowMs() - lastGadgetAtMs > settings.useGadgetIntervalMs) {
+                if (settings.useGadgetEnabled && settings.useGadgetIntervalMs > 0 &&
+                    nowMs() - lastGadgetAtMs > settings.useGadgetIntervalMs) {
                     input.tapButton(GameButton.Gadget)
                     lastGadgetAtMs = nowMs()
                 }
@@ -363,6 +381,7 @@ class PathExecutor(
     }
 
     private fun afterMove(waypoint: WaypointForTrack) {
+        waypoint.action?.let { if (PathingParty.elementFor(it) != null) party?.collect(it) }
         if (waypoint.action == PathAction.UseGadget) {
             useGadget(waypoint)
             runtime.delay(1000)

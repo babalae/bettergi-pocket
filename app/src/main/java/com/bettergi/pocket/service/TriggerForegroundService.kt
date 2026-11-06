@@ -25,7 +25,7 @@ import com.bettergi.pocket.input.InputAccessibilityService
 import com.bettergi.pocket.overlay.OverlayWindowController
 import com.bettergi.pocket.pathing.PathingController
 import com.bettergi.pocket.pathing.PathingLayout
-import com.bettergi.pocket.pathing.PathingRouteActivity
+import com.bettergi.pocket.pathing.PathingRouteWindow
 import com.bettergi.pocket.pathing.executor.ScreenCaptureFrameSource
 import com.bettergi.pocket.pathing.input.PassthroughTouchClient
 import com.bettergi.pocket.pathing.map.MapManager
@@ -50,6 +50,7 @@ class TriggerForegroundService : Service() {
     private lateinit var pathingController: PathingController
     private lateinit var pathingSettingsRepository: PathingSettingsRepository
     private lateinit var pathingRouteStore: PathingRouteStore
+    private lateinit var pathingWindow: PathingRouteWindow
 
     @Volatile
     private var requestingCapturePermission = false
@@ -114,6 +115,7 @@ class TriggerForegroundService : Service() {
         val phoneHud = loadPhoneHud(recognitionAssets)
         pathingController = PathingController(
             frames = ScreenCaptureFrameSource(captureController),
+            partyAssets = applicationContext.assets,
             loadLayout = {
                 val assets = MapManager.assets ?: error("地图资源未初始化")
                 PathingLayout.load(assets)
@@ -130,12 +132,17 @@ class TriggerForegroundService : Service() {
             bigMap = phoneHud ?: UnavailableBigMapUi,
             touch = PassthroughTouchClient(overlayController),
         )
-        overlayController.onPathingToggle = { pathingController.toggleReadout() }
-        overlayController.onPathingStart = { pathingController.startRoute() }
-        overlayController.onPickRoute = { openRoutePicker() }
-        overlayController.onCycleGadget = {
-            pathingSettingsRepository.cycleGadgetInterval()
-            refreshPathingPanel()
+        pathingWindow = PathingRouteWindow(
+            context = this,
+            store = pathingRouteStore,
+            settings = pathingSettingsRepository,
+            onExecute = { pathingController.startRoute() },
+            onToggleReadout = { pathingController.toggleReadout() },
+            isReadoutRunning = { pathingController.isReadoutRunning() },
+            log = { overlayController.log(it) },
+        )
+        overlayController.onPathingStart = {
+            if (pathingController.isRouteRunning()) pathingController.stop() else pathingWindow.show()
         }
         settingsRepository.addListener(settingsListener)
         genshinLaunchMonitor.start()
@@ -244,6 +251,7 @@ class TriggerForegroundService : Service() {
         if (::pathingController.isInitialized) {
             pathingController.stop()
         }
+        if (::pathingWindow.isInitialized) pathingWindow.release()
         engine.release()
         captureController.stop()
         overlayController.hide()
@@ -264,13 +272,7 @@ class TriggerForegroundService : Service() {
 
     private fun refreshPathingPanel() {
         if (!::pathingRouteStore.isInitialized || !::pathingSettingsRepository.isInitialized) return
-        overlayController.showPathing(pathingRouteStore.label(), pathingSettingsRepository.get())
-    }
-
-    private fun openRoutePicker() {
-        val intent = Intent(this, PathingRouteActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(intent)
+        overlayController.showPathing(pathingRouteStore.label())
     }
 
     private fun requestCapturePermission() {

@@ -40,6 +40,7 @@ data class MapZoomLayout(
     val zoomInY: Int,
     val zoomOutY: Int,
 ) {
+    /** 按参考画布上的滑块中心 Y 坐标计算等级；原生截图坐标需先反向换算。 */
     fun level(knobCenterY: Double): Double {
         val span = (zoomOutY - zoomInY).toDouble()
         if (span == 0.0) return 1.0
@@ -79,10 +80,12 @@ data class PathingLayout(
     val pickup: ControlPoint? = null,
     /** 大地图右下角区域名。点开后右侧出现地区列表。 */
     val regionButton: ControlPoint? = null,
-    /** 视角闭环增益 c，单位是每度多少原生像素。未测定时为 null。 */
+    /** 视角闭环增益 c，单位是在 referenceSize 分辨率下每度多少原生像素；运行时按参考画布比例换算。未测定时为 null。 */
     val cameraGain: Double? = null,
     /** 大地图缩放滑条。上端是放大（等级 1），下端是缩小（等级 6）。 */
     val mapZoom: MapZoomLayout? = null,
+    /** 手机队伍栏只显示三个后台头像，当前角色隐藏；按从上到下标定。 */
+    val partyAvatars: List<IntRect> = emptyList(),
 ) {
     companion object {
         const val FILE_NAME = "layout.json"
@@ -133,6 +136,9 @@ data class PathingLayout(
             }
             return PathingLayout(
                 referenceSize, miniMap, joystick, viewArea, buttons, pickup, regionButton, cameraGain, mapZoom,
+                root.optJSONArray("partyAvatars")?.let { rows ->
+                    (0 until rows.length()).map { parseRect(rows.getString(it)) }
+                } ?: emptyList(),
             )
         }
 

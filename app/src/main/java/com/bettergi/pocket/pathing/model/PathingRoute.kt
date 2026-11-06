@@ -3,6 +3,7 @@ package com.bettergi.pocket.pathing.model
 import com.bettergi.pocket.pathing.common.Point2f
 import com.bettergi.pocket.pathing.map.FileMapAssetSource
 import com.bettergi.pocket.pathing.map.MapManager
+import com.bettergi.pocket.pathing.map.MapMatchingMethod
 import com.bettergi.pocket.pathing.map.MapTypes
 import com.bettergi.pocket.pathing.map.SceneMap
 import com.bettergi.pocket.pathing.map.TeyvatMap
@@ -28,10 +29,10 @@ enum class PathAction(
     PickAround("pick_around", "尝试在周围拾取", ForcedPointType.Custom, false),
     Fight("fight", "战斗", ForcedPointType.Path, false),
     UpDownGrabLeaf("up_down_grab_leaf", "四叶印", ForcedPointType.Custom, false),
-    HydroCollect("hydro_collect", "水元素力采集", ForcedPointType.Target, false),
-    ElectroCollect("electro_collect", "雷元素力采集", ForcedPointType.Target, false),
-    AnemoCollect("anemo_collect", "风元素力采集", ForcedPointType.Target, false),
-    PyroCollect("pyro_collect", "火元素力采集", ForcedPointType.Target, false),
+    HydroCollect("hydro_collect", "水元素力采集", ForcedPointType.Target, true),
+    ElectroCollect("electro_collect", "雷元素力采集", ForcedPointType.Target, true),
+    AnemoCollect("anemo_collect", "风元素力采集", ForcedPointType.Target, true),
+    PyroCollect("pyro_collect", "火元素力采集", ForcedPointType.Target, true),
     CombatScript("combat_script", "战斗策略脚本", ForcedPointType.Custom, false),
     Mining("mining", "挖矿", ForcedPointType.Custom, false),
     LinneaMining("linnea_mining", "莉奈娅挖矿", ForcedPointType.Custom, false),
@@ -126,6 +127,10 @@ data class PathingRoute(
     val waypoints: List<Waypoint>,
 ) {
     val segments: List<List<WaypointForTrack>> by lazy { PathingRoutes.segment(this) }
+
+    /** 任务开始时固定实际算法，坐标转换和后续定位使用同一份结果。 */
+    fun withMatchingMethod(default: MapMatchingMethod): PathingRoute =
+        copy(mapMatchMethod = MapMatchingMethod.resolve(mapMatchMethod, default).value)
 }
 
 data class PathingResult(
@@ -144,7 +149,7 @@ object PathingRoutes {
                 waypoints += parseWaypoint(positions.getJSONObject(i))
             }
         }
-        val method = info?.optString("map_match_method", "")?.takeIf { it.isNotBlank() }
+        val method = (info?.opt("map_match_method") as? String)?.takeIf { it.isNotBlank() }
         return PathingRoute(
             name = info?.optString("name").orEmpty(),
             mapName = info?.optString("map_name")?.takeIf { it.isNotBlank() } ?: MapTypes.Teyvat.name,

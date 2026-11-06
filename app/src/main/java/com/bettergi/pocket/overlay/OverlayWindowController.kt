@@ -47,7 +47,6 @@ import com.bettergi.pocket.genshin.GenshinLauncher
 import com.bettergi.pocket.genshin.GenshinPackages
 import com.bettergi.pocket.input.AccessibilityServiceHealth
 import com.bettergi.pocket.input.InputAccessibilityService
-import com.bettergi.pocket.pathing.settings.PathingSettings
 import com.bettergi.pocket.settings.TriggerSettings
 import com.bettergi.pocket.settings.TriggerSettingsRepository
 import java.text.SimpleDateFormat
@@ -118,19 +117,9 @@ class OverlayWindowController(
     private var launchChevron: ImageView? = null
     private var launchMenuExpanded = false
     private var pathingRow: View? = null
-    private var pathingToggle: View? = null
-    private var pathingToggleText: TextView? = null
-    private var pathingExtras: View? = null
-    private var pathingChevron: ImageView? = null
     private var pathingStatus: TextView? = null
-    private var pathingMenuExpanded = false
-    var onPathingToggle: (() -> Unit)? = null
     var onPathingStart: (() -> Unit)? = null
-    var onPickRoute: (() -> Unit)? = null
-    var onCycleGadget: (() -> Unit)? = null
-    private var pathingRoute: TextView? = null
     private var pathingStart: TextView? = null
-    private var pathingGadget: TextView? = null
     private var logHandleView: View? = null
     private var logBodyView: View? = null
     private var logTitle: TextView? = null
@@ -224,14 +213,8 @@ class OverlayWindowController(
         launchExtras = root.findViewById(R.id.overlay_launch_extras)
         launchChevron = root.findViewById(R.id.overlay_launch_chevron)
         pathingRow = root.findViewById(R.id.overlay_row_pathing)
-        pathingToggle = root.findViewById(R.id.overlay_pathing_toggle)
-        pathingToggleText = root.findViewById(R.id.overlay_pathing_toggle_text)
-        pathingExtras = root.findViewById(R.id.overlay_pathing_extras)
-        pathingChevron = root.findViewById(R.id.overlay_pathing_chevron)
         pathingStatus = root.findViewById(R.id.overlay_pathing_status)
-        pathingRoute = root.findViewById(R.id.overlay_pathing_route)
         pathingStart = root.findViewById(R.id.overlay_pathing_start)
-        pathingGadget = root.findViewById(R.id.overlay_pathing_gadget)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             root.findViewById<View>(R.id.overlay_group_pathing)?.visibility = View.GONE
         }
@@ -268,13 +251,12 @@ class OverlayWindowController(
         logToggle.setOnClickListener { setLogWindowVisible(!logWindowVisible) }
         rowAutoSkip?.setOnClickListener { setAutoSkipMenuExpanded(!autoSkipMenuExpanded) }
         rowLaunch?.setOnClickListener { setLaunchMenuExpanded(!launchMenuExpanded) }
-        pathingRow?.setOnClickListener { setPathingMenuExpanded(!pathingMenuExpanded) }
-        pathingToggle?.setOnClickListener { onPathingToggle?.invoke() }
-        pathingStart?.setOnClickListener { onPathingStart?.invoke() }
-        val pickRoute = View.OnClickListener { onPickRoute?.invoke() }
-        pathingRoute?.setOnClickListener(pickRoute)
-        root.findViewById<View>(R.id.overlay_pathing_pick)?.setOnClickListener(pickRoute)
-        pathingGadget?.setOnClickListener { onCycleGadget?.invoke() }
+        val startPathing = View.OnClickListener {
+            setExpanded(false)
+            onPathingStart?.invoke()
+        }
+        pathingRow?.setOnClickListener(startPathing)
+        pathingStart?.setOnClickListener(startPathing)
         root.findViewById<View>(R.id.overlay_launch).setOnClickListener { launchGenshinFromButton() }
         root.findViewById<ImageButton>(R.id.overlay_bilibili).also { button ->
             ImageViewCompat.setImageTintList(button, null)
@@ -319,7 +301,6 @@ class OverlayWindowController(
         setLogWindowVisible(prefs.getBoolean(KEY_LOG_VISIBLE, false), persist = false)
         setAutoSkipMenuExpanded(prefs.getBoolean(KEY_AUTO_SKIP_EXPANDED, false), persist = false)
         setLaunchMenuExpanded(prefs.getBoolean(KEY_LAUNCH_EXPANDED, false), persist = false)
-        setPathingMenuExpanded(prefs.getBoolean(KEY_PATHING_EXPANDED, false), persist = false)
         settingsRepository.addListener(settingsListener)
         startScreenWatch()
         a11yWarningReady = false
@@ -449,14 +430,8 @@ class OverlayWindowController(
         launchExtras = null
         launchChevron = null
         pathingRow = null
-        pathingToggle = null
-        pathingToggleText = null
-        pathingExtras = null
-        pathingChevron = null
         pathingStatus = null
-        pathingRoute = null
         pathingStart = null
-        pathingGadget = null
     }
 
     private fun collapseOnOutsideTouch() {
@@ -624,7 +599,6 @@ class OverlayWindowController(
         rowAutoPick?.alpha = if (shareOn) 1f else 0.45f
         rowQuickSkip?.alpha = if (autoSkipOn) 1f else 0.45f
         pathingRow?.alpha = if (shareOn) 1f else 0.45f
-        pathingToggle?.isEnabled = shareOn
     }
 
     override fun onTalkHistoryMatched() {
@@ -651,9 +625,7 @@ class OverlayWindowController(
 
     fun setPathingRunning(running: Boolean) {
         mainHandler.post {
-            pathingToggleText?.text = if (running) "停止" else "显示"
             if (running) {
-                setPathingMenuExpanded(true)
                 if (!logWindowVisible) {
                     setLogWindowVisible(true)
                 }
@@ -663,18 +635,16 @@ class OverlayWindowController(
 
     fun setRouteRunning(running: Boolean) {
         mainHandler.post {
-            pathingStart?.text = if (running) "停止路线" else "开始路线"
+            pathingStart?.text = if (running) "停止" else "开始"
             if (running) {
-                setPathingMenuExpanded(true)
                 if (!logWindowVisible) setLogWindowVisible(true)
             }
         }
     }
 
-    fun showPathing(routeLabel: String, settings: PathingSettings) {
+    fun showPathing(routeLabel: String) {
         mainHandler.post {
-            pathingRoute?.text = routeLabel
-            pathingGadget?.text = "自动 Z ${if (settings.useGadgetIntervalMs == 0) "关" else "${settings.useGadgetIntervalMs} ms"}"
+            pathingStatus?.text = routeLabel
         }
     }
 
@@ -732,15 +702,6 @@ class OverlayWindowController(
         }
         autoSkipExtras?.visibility = if (expanded) View.VISIBLE else View.GONE
         autoSkipChevron?.animate()?.rotation(if (expanded) 90f else 0f)?.setDuration(160)?.start()
-    }
-
-    private fun setPathingMenuExpanded(expanded: Boolean, persist: Boolean = true) {
-        pathingMenuExpanded = expanded
-        if (persist) {
-            prefs.edit().putBoolean(KEY_PATHING_EXPANDED, expanded).apply()
-        }
-        pathingExtras?.visibility = if (expanded) View.VISIBLE else View.GONE
-        pathingChevron?.animate()?.rotation(if (expanded) 90f else 0f)?.setDuration(160)?.start()
     }
 
     private fun setLaunchMenuExpanded(expanded: Boolean, persist: Boolean = true) {
@@ -1235,7 +1196,6 @@ class OverlayWindowController(
         private const val KEY_LOG_VISIBLE = "log_visible"
         private const val KEY_AUTO_SKIP_EXPANDED = "auto_skip_expanded"
         private const val KEY_LAUNCH_EXPANDED = "launch_expanded"
-        private const val KEY_PATHING_EXPANDED = "pathing_expanded"
         private const val LOG_WIDTH_DP = 260
         private const val LOG_DEFAULT_HEIGHT_DP = 204
         private const val IDLE_ALPHA = 0.62f

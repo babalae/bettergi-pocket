@@ -1,0 +1,19 @@
+{
+  "input": "in0",
+  "output": "out0",
+  "inputSize": [
+    64,
+    64
+  ],
+  "color": "RGB",
+  "normalization": "1/255",
+  "classes": 162,
+  "outputHasSoftmax": true,
+  "labelsSource": "BetterGI avatar_side_classify_sim.onnx metadata, 2026-10-24T12:00:14.203317",
+  "sha256": {
+    "avatar_labels.json": "8c578e9b5495fb4b300b01b189f14e85d041a23907d029bd6810ee69ad938895",
+    "avatar_side_classify_sim.bin": "121a8691f5403d367e087bce43eb87f0d1f5dd6a80bcde6d9d4b102226bd89cc",
+    "avatar_side_classify_sim.param": "0cd56e0ac965676fba242a832bc682e18f44f92ec21847a198fd7994aebab4e0",
+    "combat_avatar.json": "33de4a3c1a3899d80d79070d525a088c67b24fe6080e34297b8a958f1944df61"
+  }
+}

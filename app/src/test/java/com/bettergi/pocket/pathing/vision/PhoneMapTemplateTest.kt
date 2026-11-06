@@ -1,9 +1,11 @@
 package com.bettergi.pocket.pathing.vision
 
+import com.bettergi.pocket.pathing.MapZoomLayout
 import com.bettergi.pocket.pathing.PathingLayout
 import com.bettergi.pocket.pathing.PathingTestData
 import com.bettergi.pocket.recognition.IntRect
 import com.bettergi.pocket.recognition.IntSize
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -14,8 +16,11 @@ import org.opencv.core.Mat
 import org.opencv.core.MatOfByte
 import org.opencv.core.Rect
 import org.opencv.core.Scalar
+import org.opencv.core.Size
 import org.opencv.imgcodecs.Imgcodecs
+import org.opencv.imgproc.Imgproc
 import java.io.File
+import kotlin.math.roundToInt
 
 /**
  * 用 TB322FC 截图的固定裁图核对手机模板；样本随测试提交，模板在 assets 里。
@@ -82,6 +87,58 @@ class PhoneMapTemplateTest {
             assertTrue(knobHit != null && kotlin.math.abs(knobHit.centerY - 144) <= 8)
         } finally {
             listOf(mapSettings, mapClose, zoomed, settings, close, knob).forEach { it.release() }
+        }
+    }
+
+    @Test
+    fun `zoom level stays consistent after scaling and centered anchoring`() {
+        val knob = template("map_zoom_knob.png")
+        val reference = IntSize(3040, 1904)
+        val layout = PathingLayout(reference, null, mapZoom = MapZoomLayout(94, 762, 1142))
+        val hud = PhoneHud(
+            referenceWidth = reference.width,
+            referenceHeight = reference.height,
+            paimon = knob, mapClose = knob, mapSettings = knob, panelClose = knob,
+            zoomKnob = knob, teleportButton = knob, waypoint = knob, domain = knob,
+            layout = layout,
+        )
+        val sizes = listOf(
+            reference, IntSize(1520, 952), IntSize(6080, 3808),
+            IntSize(2400, 1080), IntSize(1520, 1200),
+        )
+        try {
+            for (size in sizes) {
+                val scale = minOf(size.width / 3040.0, size.height / 1904.0)
+                val offsetY = (size.height - 1904 * scale) / 2.0
+                val scaledKnob = Mat()
+                val frame = Mat(size.height, size.width, CvType.CV_8UC1, Scalar(0.0))
+                try {
+                    Imgproc.resize(
+                        knob, scaledKnob, Size(knob.cols() * scale, knob.rows() * scale),
+                        0.0, 0.0, if (scale < 1.0) Imgproc.INTER_AREA else Imgproc.INTER_CUBIC,
+                    )
+                    for ((referenceY, expected) in listOf(762 to 1.0, 857 to 2.25, 952 to 3.5, 1047 to 4.75, 1142 to 6.0)) {
+                        frame.setTo(Scalar(0.0))
+                        // 手工放置当前分辨率下的滑块，独立验证识别结果的反向坐标换算。
+                        val x = (94 * scale).roundToInt() - scaledKnob.cols() / 2
+                        val y = (referenceY * scale + offsetY).roundToInt() - scaledKnob.rows() / 2
+                        val target = frame.submat(Rect(x, y, scaledKnob.cols(), scaledKnob.rows()))
+                        try {
+                            scaledKnob.copyTo(target)
+                        } finally {
+                            target.release()
+                        }
+                        val level = hud.zoomLevel(frame)
+                        assertTrue("画面 $size 未识别到等级 $expected 的滑块", level != null)
+                        assertEquals("画面 $size", expected, level!!, 0.03)
+                    }
+                } finally {
+                    scaledKnob.release()
+                    frame.release()
+                }
+            }
+        } finally {
+            knob.release()
         }
     }
 

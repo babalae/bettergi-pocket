@@ -1,4 +1,6 @@
 import java.util.Properties
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 
 plugins {
     alias(libs.plugins.android.application)
@@ -14,8 +16,33 @@ fun analyticsProperty(name: String, fallback: String = ""): String =
         ?: localConfig.getProperty(name)
         ?: fallback
 
+// 从本次打包的路线提取匹配方式，选择界面无需逐条解析数千个路线文件。
+val routeMetadataDir = layout.buildDirectory.dir("generated/routeMetadata/assets")
+val generateRouteMetadata by tasks.registering {
+    val routes = fileTree("src/main/assets/pathing/routes") { include("**/*.json") }
+    inputs.files(routes).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.dir(routeMetadataDir)
+    doLast {
+        val root = file("src/main/assets/pathing/routes").toPath()
+        val metadata = routes.files.sortedBy { it.path }.associate { route ->
+            val path = root.relativize(route.toPath()).toString().replace('\\', '/')
+            // 无效路线仍交给执行器记录并跳过；列表明确显示读取失败，避免误报算法。
+            val info = runCatching {
+                val parsed = JsonSlurper().parseText(route.readText(Charsets.UTF_8)) as Map<*, *>
+                val method = (parsed["info"] as? Map<*, *>)?.get("map_match_method") as? String
+                mapOf("map_match_method" to method?.takeIf { it.isNotBlank() })
+            }.getOrNull()
+            path to info
+        }
+        val output = routeMetadataDir.get().file("pathing/routes-metadata.json").asFile
+        output.parentFile.mkdirs()
+        output.writeText(JsonOutput.toJson(metadata), Charsets.UTF_8)
+    }
+}
+
 android {
     namespace = "com.bettergi.pocket"
+    sourceSets.getByName("main").assets.srcDir(routeMetadataDir.get().asFile)
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -34,6 +61,14 @@ android {
         resValue("string", "baidu_mtj_channel", analyticsProperty("BAIDU_MTJ_CHANNEL", "official"))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    ndkVersion = "28.2.13676358"
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     splits {
@@ -73,6 +108,8 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 }
+
+tasks.named("preBuild") { dependsOn(generateRouteMetadata) }
 
 dependencies {
     // 官网新版 SDK；Maven Central 的 mtj-sdk 仍是旧版，来源与校验值见 libs/README.md。

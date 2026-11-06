@@ -88,7 +88,9 @@ class GameInput(
      */
     fun rotateByDiff(diffDegrees: Float): InputResult {
         val gain = layout.cameraGain ?: return InputResult.NotCalibrated("视角灵敏度")
-        val pixels = CameraControl.swipePixels(diffDegrees, gain)
+        val scale = mapScale() ?: return InputResult.NotCalibrated("参考画布")
+        // 增益在参考分辨率下标定，换成当前分辨率的像素/度后再计算并取整。
+        val pixels = CameraControl.swipePixels(diffDegrees, gain * scale)
         if (pixels == 0) return InputResult.Ok
         val area = viewArea() ?: return InputResult.NotCalibrated("视角区")
         var current = viewTouch
@@ -134,9 +136,17 @@ class GameInput(
 
     fun dragEnd(): InputResult = if (client.dragEnd()) InputResult.Ok else InputResult.Failed
 
+    /** 大地图双指开合，坐标和指间距都是原生屏幕像素。 */
+    fun pinchMap(startSpan: Int, endSpan: Int, durationMs: Long): InputResult {
+        return if (client.pinch(screenWidth / 2, screenHeight / 2, startSpan, endSpan, durationMs)) {
+            InputResult.Ok
+        } else InputResult.Failed
+    }
+
     fun releaseAll(): InputResult {
         viewTouch = null
-        return if (client.releaseAll()) InputResult.Ok else InputResult.Failed
+        if (!client.releaseAllAndWait()) throw TouchReleaseException()
+        return InputResult.Ok
     }
 
     private fun buttonPoint(button: GameButton): Pair<Int, Int>? {
@@ -169,7 +179,7 @@ class GameInput(
 
     private fun mapScale(): Double? {
         val reference = layout.referenceSize ?: return null
-        if (screenWidth <= 0 || screenHeight <= 0) return null
+        if (screenWidth <= 0 || screenHeight <= 0 || reference.width <= 0 || reference.height <= 0) return null
         return minOf(
             screenWidth / reference.width.toDouble(),
             screenHeight / reference.height.toDouble(),
@@ -180,3 +190,8 @@ class GameInput(
         const val TAP_MS = 50L
     }
 }
+
+/** 释放失败必须退出整个批次，不能被当作普通路线失败后继续下一条。 */
+class TouchReleaseException : java.util.concurrent.CancellationException(
+    "触点释放未确认，请关闭再重新开启无障碍服务后重试",
+)

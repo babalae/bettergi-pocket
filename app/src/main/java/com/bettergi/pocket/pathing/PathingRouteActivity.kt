@@ -15,7 +15,9 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bettergi.pocket.R
+import com.bettergi.pocket.pathing.map.MapMatchingMethod
 import com.bettergi.pocket.pathing.settings.PathingRouteStore
+import com.bettergi.pocket.pathing.settings.PathingSettingsRepository
 import com.bettergi.pocket.pathing.settings.RouteCatalog
 import com.bettergi.pocket.service.TriggerForegroundService
 
@@ -63,8 +65,9 @@ class PathingRouteActivity : AppCompatActivity() {
 
     private fun loadCatalog(): RouteCatalog {
         return try {
+            val metadata = assets.open(RouteCatalog.METADATA_ASSET).bufferedReader(Charsets.UTF_8).use { it.readText() }
             assets.open(RouteCatalog.INDEX_ASSET).bufferedReader(Charsets.UTF_8).use { reader ->
-                RouteCatalog.parse(reader.readText())
+                RouteCatalog.parse(reader.readText(), metadata)
             }
         } catch (_: Exception) {
             RouteCatalog(emptyList())
@@ -91,7 +94,7 @@ class PathingRouteActivity : AppCompatActivity() {
     private fun render() {
         if (!::list.isInitialized) return
         val listing = catalog.rows(expanded, search.text?.toString().orEmpty())
-        adapter.submit(listing.rows, selectedPath)
+        adapter.submit(listing.rows, selectedPath, PathingSettingsRepository(this).get().mapMatchingMethod)
         val message = when {
             catalog.roots.isEmpty() -> "应用里还没有路线"
             listing.rows.isEmpty() -> "没有匹配的路线"
@@ -139,10 +142,12 @@ private class RouteTreeAdapter(
 ) : RecyclerView.Adapter<RouteTreeAdapter.Holder>() {
     private var rows: List<RouteCatalog.Row> = emptyList()
     private var selectedPath: String? = null
+    private var defaultMethod = MapMatchingMethod.TemplateMatch
 
-    fun submit(rows: List<RouteCatalog.Row>, selectedPath: String?) {
+    fun submit(rows: List<RouteCatalog.Row>, selectedPath: String?, defaultMethod: MapMatchingMethod) {
         this.rows = rows
         this.selectedPath = selectedPath
+        this.defaultMethod = defaultMethod
         notifyDataSetChanged()
     }
 
@@ -154,7 +159,7 @@ private class RouteTreeAdapter(
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
-        holder.bind(rows[position], selectedPath)
+        holder.bind(rows[position], selectedPath, defaultMethod)
     }
 
     class Holder(
@@ -171,7 +176,7 @@ private class RouteTreeAdapter(
             view.setOnClickListener { row?.let(onClick) }
         }
 
-        fun bind(row: RouteCatalog.Row, selectedPath: String?) {
+        fun bind(row: RouteCatalog.Row, selectedPath: String?, defaultMethod: MapMatchingMethod) {
             this.row = row
             val node = row.node
             val vertical = (4 * density).toInt()
@@ -184,11 +189,15 @@ private class RouteTreeAdapter(
                     if (selected) R.color.overlay_gold else R.color.overlay_text,
                 ),
             )
-            if (row.breadcrumb.isEmpty()) {
+            val detail = listOfNotNull(
+                node.matchingDescription(defaultMethod).takeIf { node.file },
+                row.breadcrumb.takeIf { it.isNotEmpty() },
+            ).joinToString(" · ")
+            if (detail.isEmpty()) {
                 crumb.visibility = View.GONE
             } else {
                 crumb.visibility = View.VISIBLE
-                crumb.text = row.breadcrumb
+                crumb.text = detail
             }
             if (node.file) {
                 chevron.visibility = if (row.breadcrumb.isEmpty()) View.INVISIBLE else View.GONE

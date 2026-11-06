@@ -53,7 +53,8 @@ class MapTeleport(
         log("开始传送：${target.name.ifBlank { "坐标" }} ${target.x}, ${target.y}")
         openBigMap(mapName)
         switchCountry(target.country)
-        dragToward(target.x, target.y, mapName)
+        val neighborDistance = hypot(nearest[0].x - nearest[1].x, nearest[0].y - nearest[1].y)
+        dragToward(target.x, target.y, mapName, MapZoom.finalClickLevel(neighborDistance))
         val frame = runtime.nextFrame(500) ?: throw HandledException("打开大地图后没有新画面")
         try {
             val observed = IconAlignment.mergeNearby(bigMap.observedIcons(frame.bgr))
@@ -191,19 +192,45 @@ class MapTeleport(
         }
     }
 
-    private fun dragToward(targetX: Double, targetY: Double, mapName: String) {
-        val start = positionFromBigMap(mapName) ?: throw HandledException("大地图中心没有识别出来")
+    private fun dragToward(targetX: Double, targetY: Double, mapName: String, finalZoom: Double) {
         val zoom = readZoom()
         log("大地图缩放等级 ${"%.2f".format(zoom)}")
+        val (start, recoveredZoom) = MapZoom.locateCenter(
+            zoom,
+            readCenter = { positionFromBigMap(mapName) },
+            adjust = { adjustMapZoom(it) },
+        ) ?: throw HandledException("调整缩放后大地图中心仍没有识别出来")
         MapDrag.moveToward(
             start = start,
             targetX = targetX,
             targetY = targetY,
-            zoom = zoom,
+            zoom = recoveredZoom,
             // BGI `MoveMapToCore`：用惯性预测的中心做本地 SIFT
             readCenter = { predicted -> positionFromBigMap(mapName, predicted) },
             drag = { dx, dy -> dragBySteps(dx, dy) },
+            finalZoom = finalZoom,
+            adjustZoom = { adjustMapZoom(it) },
         )
+    }
+
+    private fun adjustMapZoom(target: Double): Double {
+        input.releaseAll()
+        val start = readZoom()
+        log("调整大地图缩放：${"%.2f".format(start)} → ${"%.2f".format(target)}（双指）")
+        val actual = MapZoom.adjust(start, target) { current, goal ->
+            val plan = MapZoom.pinchPlan(screenWidth, screenHeight, current, goal)
+            if (!input.pinchMap(plan.startSpan, plan.endSpan, MapZoom.GESTURE_MS).succeeded) {
+                throw HandledException("大地图双指缩放手势没有发出")
+            }
+            // 手势完成并等待游戏和截图响应后，才读取新的滑块位置。
+            runtime.delay(MapZoom.GESTURE_MS + MapZoom.SETTLE_MS)
+            readZoom()
+        }
+        log("大地图缩放实际等级 ${"%.2f".format(actual)}")
+        if (kotlin.math.abs(actual - target) > MapZoom.PRECISION) {
+            throw HandledException("大地图双指缩放未达到目标等级：$actual / $target")
+        }
+        return actual
     }
 
     /**
@@ -301,12 +328,17 @@ class MapTeleport(
     }
 
     private fun readZoom(): Double {
-        val frame = runtime.nextFrame(200) ?: return 1.0
-        try {
-            return bigMap.zoomLevel(frame.bgr) ?: 1.0
-        } finally {
-            frame.bgr.release()
+        repeat(3) { attempt ->
+            val frame = runtime.nextFrame(300)
+            try {
+                val zoom = frame?.let { bigMap.zoomLevel(it.bgr) }
+                if (zoom != null && zoom.isFinite() && zoom in 1.0..6.0) return zoom
+            } finally {
+                frame?.bgr?.release()
+            }
+            if (attempt < 2) runtime.delay(100)
         }
+        throw HandledException("没有识别到大地图缩放滑块，无法确认缩放等级")
     }
 
     /** 点到传送图标后等面板，再点传送按钮。来源：BGI `WaitForTeleportPanelAndConfirm`。 */

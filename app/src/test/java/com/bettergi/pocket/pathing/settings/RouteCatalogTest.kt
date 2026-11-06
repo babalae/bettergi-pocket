@@ -61,4 +61,35 @@ class RouteCatalogTest {
         assertEquals(1, listing.rows.size)
         assertTrue(listing.truncated)
     }
+
+    @Test
+    fun `directory selection includes descendants without duplicate or prefix collisions`() {
+        val routes = RouteCatalog.parse("采集/a/1.json\n采集/a/sub/2.json\n采集/ab/3.json")
+        val selected = routes.resolve(setOf("采集/a", "采集/a/1.json"))
+        assertEquals(listOf("采集/a/sub/2.json", "采集/a/1.json"), selected.map { it.relativePath })
+        assertEquals(3, routes.resolve(setOf("采集")).size)
+        assertTrue(routes.resolve(setOf("不存在")).isEmpty())
+    }
+
+    @Test
+    fun `browser searches folders and files and stays in current directory`() {
+        val routes = RouteCatalog.parse("食材/甜甜花/1.json\n食材/薄荷/2.json\n矿物/甜甜花/3.json")
+        val result = routes.browse("食材", "甜甜花")
+        assertEquals(listOf("食材/甜甜花"), result.rows.map { it.node.relativePath })
+        assertEquals(1, result.rows.single().node.routePaths.size)
+        assertEquals("食材/薄荷/2.json", routes.browse("食材", "2").rows.single().node.relativePath)
+    }
+
+    @Test
+    fun `browser supports pinyin index and multiple keywords`() {
+        val routes = RouteCatalog.parse("食材/甜甜花/蒙德1.json") { "tiantianhua mengde tth md" }
+        assertEquals(1, routes.browse("", "tth md").rows.size)
+        assertTrue(routes.browse("", "tth liyue").rows.isEmpty())
+    }
+
+    @Test
+    fun `catalog ignores paths escaping asset root`() {
+        val routes = RouteCatalog.parse("../坏.json\n/root.json\n./bad.json\n正常/好.json")
+        assertEquals(listOf("正常"), routes.roots.map { it.name })
+    }
 }

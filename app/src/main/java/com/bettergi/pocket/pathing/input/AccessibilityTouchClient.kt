@@ -20,6 +20,9 @@ object AccessibilityTouchClient : TouchClient {
 
     override fun dragBegin(x: Int, y: Int): Boolean = InputAccessibilityService.dragBegin(x, y)
 
+    override fun pinch(centerX: Int, centerY: Int, startSpan: Int, endSpan: Int, durationMs: Long): Boolean =
+        InputAccessibilityService.pinch(centerX, centerY, startSpan, endSpan, durationMs)
+
     override fun dragStep(x: Int, y: Int, durationMs: Long): Boolean {
         return InputAccessibilityService.dragStep(x, y, durationMs)
     }
@@ -27,4 +30,6 @@ object AccessibilityTouchClient : TouchClient {
     override fun dragEnd(): Boolean = InputAccessibilityService.dragEnd()
 
     override fun releaseAll(): Boolean = InputAccessibilityService.releaseAllTouches()
+
+    override fun releaseAllAndWait(timeoutMs: Long): Boolean = InputAccessibilityService.releaseAllTouchesAndWait(timeoutMs)
 }

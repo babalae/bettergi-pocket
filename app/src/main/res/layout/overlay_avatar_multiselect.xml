@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:elevation="20dp"
+    android:focusableInTouchMode="true"
+    android:background="@drawable/bg_pathing_dropdown">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical">
+        <TextView android:id="@+id/avatar_select_title" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:textSize="16sp" android:textStyle="bold" android:textColor="@color/overlay_text" />
+        <TextView android:id="@+id/avatar_select_cancel" style="@style/PathingWindowAction" android:text="取消" />
+    </LinearLayout>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="按已选顺序匹配队伍 · 点击 ↑ ↓ 调整优先级" android:textSize="11sp"
+        android:layout_marginBottom="8dp" android:textColor="@color/overlay_text_muted" />
+    <EditText android:id="@+id/avatar_select_search" android:layout_width="match_parent" android:layout_height="42dp"
+        android:background="@drawable/bg_overlay_row" android:paddingHorizontal="10dp"
+        android:hint="搜索角色名、英文名或别名" android:singleLine="true" android:imeOptions="actionDone"
+        android:inputType="text" android:textSize="13sp" android:textColor="@color/overlay_text"
+        android:textColorHint="@color/overlay_text_muted" />
+    <HorizontalScrollView android:layout_width="match_parent" android:layout_height="48dp"
+        android:fillViewport="true" android:scrollbars="none" android:layout_marginTop="6dp">
+        <LinearLayout android:id="@+id/avatar_select_chips" android:layout_width="wrap_content"
+            android:layout_height="match_parent" android:gravity="center_vertical" android:orientation="horizontal" />
+    </HorizontalScrollView>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="36dp" android:gravity="center_vertical">
+        <TextView android:id="@+id/avatar_select_visible" style="@style/PathingWindowAction" android:layout_height="36dp" android:text="全选筛选结果" />
+        <TextView android:id="@+id/avatar_select_clear" style="@style/PathingWindowAction" android:layout_height="36dp" android:text="清空" />
+        <TextView android:id="@+id/avatar_select_defaults" style="@style/PathingWindowAction" android:layout_height="36dp" android:text="恢复默认" />
+    </LinearLayout>
+    <androidx.recyclerview.widget.RecyclerView android:id="@+id/avatar_select_list"
+        android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:clipToPadding="false" android:paddingBottom="4dp" />
+    <TextView android:id="@+id/avatar_select_empty" android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:gravity="center" android:text="没有匹配的角色"
+        android:textColor="@color/overlay_text_muted" android:visibility="gone" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="44dp" android:gravity="center_vertical">
+        <TextView android:id="@+id/avatar_select_count" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:textSize="12sp" android:textColor="@color/overlay_text_muted" />
+        <TextView android:id="@+id/avatar_select_save" style="@style/PathingWindowAction" android:layout_width="110dp"
+            android:background="@drawable/bg_overlay_launch" android:text="确认选择" />
+    </LinearLayout>
+</LinearLayout>

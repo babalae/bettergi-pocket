@@ -10,6 +10,7 @@ import com.bettergi.pocket.recognition.CaptureContent
 import com.bettergi.pocket.recognition.IntRect
 import com.bettergi.pocket.recognition.IntSize
 import com.bettergi.pocket.recognition.RecognitionAssets
+import com.bettergi.pocket.recognition.area.ReferenceRectMapping
 import com.bettergi.pocket.recognition.area.ReferenceSearch
 import org.opencv.core.CvType
 import org.opencv.core.Mat
@@ -86,7 +87,10 @@ class PhoneHud(
     override fun zoomLevel(frame: Mat): Double? {
         val zoom = layout.mapZoom ?: return null
         val hit = hit(frame, zoomKnob, KNOB_ROI, Threshold.ZOOM_KNOB) ?: return null
-        return zoom.level(hit.centerY.toDouble())
+        val mapping = referenceMapping(frame, KNOB_ROI) ?: return null
+        // 与滑块搜索 ROI 共用锚点，把原生截图坐标还原到 layout.json 的参考画布。
+        val referenceY = (hit.centerY - mapping.offsetY) / mapping.scale
+        return zoom.level(referenceY)
     }
 
     override fun isWorldUi(frame: Mat): Boolean = isInMainUi(frame) && !isInBigMap(frame)
@@ -149,14 +153,17 @@ class PhoneHud(
 
     private fun mapRoi(frame: Mat, roi: IntRect?): IntRect? {
         if (roi == null) return null
-        val mapped = ReferenceSearch.mapReferenceRect(
+        val mapped = referenceMapping(frame, roi) ?: return roi
+        return mapped.rect.clampTo(frame.cols(), frame.rows())
+    }
+
+    private fun referenceMapping(frame: Mat, roi: IntRect): ReferenceRectMapping? =
+        ReferenceSearch.mapReferenceRect(
             srcWidth = frame.cols(),
             srcHeight = frame.rows(),
             referenceImageSize = IntSize(referenceWidth, referenceHeight),
             referenceRect = roi,
-        ) ?: return roi
-        return mapped.rect.clampTo(frame.cols(), frame.rows())
-    }
+        )
 
     companion object {
         private const val DIR = "recognition/Pathing"

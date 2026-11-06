@@ -8,7 +8,7 @@ package com.bettergi.pocket.pathing.map
  * 第一版只支持提瓦特，其他地图直接抛异常。
  */
 object MapManager {
-    /** BGI 默认的匹配方式（`PathingConditionConfig.MapMatchingMethod`）。 */
+    /** BGI 默认的匹配方式（`PathingConditionConfig.MapMatchingMethod`）。路线和坐标显示由调用方传入设置解析后的实际方式。 */
     const val DEFAULT_MATCHING_METHOD = "TemplateMatch"
     const val SIFT = "SIFT"
 

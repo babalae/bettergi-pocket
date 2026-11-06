@@ -197,6 +197,7 @@ object MapDrag {
     /**
      * 把地图中心拖向目标。识别跳变超过 5 次就放弃，其余时候用预测中心继续。
      * 来源：BGI `MoveMapToCore` 的迭代，缩放调整由 [adjustZoom] 单独做。
+     * 提供缩放回调时，远距离先缩小，接近目标后放大；不提供时保留固定比例拖图。
      */
     fun moveToward(
         start: Point2f,
@@ -205,20 +206,46 @@ object MapDrag {
         zoom: Double,
         readCenter: (predicted: Point2f) -> Point2f?,
         drag: (dx: Int, dy: Int) -> Pair<Int, Int>,
+        finalZoom: Double = 2.0,
+        adjustZoom: ((target: Double) -> Double)? = null,
     ): Point2f {
         var center = start
+        var currentZoom = zoom
         var failures = 0
-        repeat(MAX_ITERATIONS) {
+        repeat(MAX_ITERATIONS) { iteration ->
+            val distance = distance(
+                mouseDelta(targetX - center.x, currentZoom),
+                mouseDelta(targetY - center.y, currentZoom),
+            )
+            val goal = finalZoom.coerceIn(1.0, MapZoom.DISPLAY_TP_LEVEL)
+            val targetZoom = when {
+                iteration == 0 && distance > MapZoom.ZOOM_OUT_DISTANCE ->
+                    (currentZoom * distance / MapZoom.ZOOM_OUT_DISTANCE).coerceIn(1.0, 6.0)
+                distance < MapZoom.ZOOM_IN_DISTANCE && currentZoom > goal + MapZoom.PRECISION ->
+                    maxOf(goal, currentZoom * distance / MapZoom.ZOOM_IN_DISTANCE)
+                else -> currentZoom
+            }
+            if (adjustZoom != null && kotlin.math.abs(targetZoom - currentZoom) > MapZoom.PRECISION) {
+                currentZoom = adjustZoom(targetZoom)
+                // 双指中心与实际地图缩放中心可能有偏移，缩放后必须重新定位，不能沿用旧中心。
+                center = readCenter(center)
+                    ?: throw com.bettergi.pocket.pathing.model.HandledException("缩放后大地图中心没有识别出来")
+                failures = 0
+            }
             val offsetX = targetX - center.x
             val offsetY = targetY - center.y
-            val mouseX = mouseDelta(offsetX, zoom)
-            val mouseY = mouseDelta(offsetY, zoom)
-            if (sqrt(mouseX * mouseX + mouseY * mouseY) < TOLERANCE) return center
-            val (dx, dy) = dragPixels(center, targetX, targetY, zoom)
+            val mouseX = mouseDelta(offsetX, currentZoom)
+            val mouseY = mouseDelta(offsetY, currentZoom)
+            if (sqrt(mouseX * mouseX + mouseY * mouseY) < TOLERANCE) {
+                // 缩放后中心可能偏移到目标附近，仍需达到点击比例后才能结束。
+                if (adjustZoom != null && currentZoom > goal + MapZoom.PRECISION) return@repeat
+                return center
+            }
+            val (dx, dy) = dragPixels(center, targetX, targetY, currentZoom)
             val (sentX, sentY) = drag(dx, dy)
-            val predicted = predictCenter(center, sentX, sentY, zoom)
+            val predicted = predictCenter(center, sentX, sentY, currentZoom)
             val observed = readCenter(predicted)
-            val expectedLen = sqrt((sentX * sentX + sentY * sentY).toDouble()) * zoom / MAP_SCALE_FACTOR
+            val expectedLen = sqrt((sentX * sentX + sentY * sentY).toDouble()) * currentZoom / MAP_SCALE_FACTOR
             if (observed == null || movedAnomaly(center, predicted, observed, expectedLen)) {
                 failures++
                 if (failures > 5) {

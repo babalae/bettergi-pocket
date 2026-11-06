@@ -26,6 +26,11 @@
   "pickup": [2083, 1302],
   "regionButton": [2665, 1750],
   "cameraGain": 0.3,
+  "partyAvatars": [
+    "rect(2820, 480, 150, 150)",
+    "rect(2820, 660, 150, 150)",
+    "rect(2820, 840, 150, 150)"
+  ],
   "mapZoom": {
     "knobX": 94,
     "zoomInY": 762,

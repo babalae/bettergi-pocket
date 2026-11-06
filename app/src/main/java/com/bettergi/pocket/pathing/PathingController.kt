@@ -7,11 +7,13 @@ import com.bettergi.pocket.pathing.executor.LocationReadoutChecks
 import com.bettergi.pocket.pathing.executor.PathExecutor
 import com.bettergi.pocket.pathing.executor.PathingFrameSource
 import com.bettergi.pocket.pathing.executor.PathingRuntime
+import com.bettergi.pocket.pathing.executor.RouteBatchRunner
 import com.bettergi.pocket.pathing.input.AccessibilityTouchClient
 import com.bettergi.pocket.pathing.input.GameInput
 import com.bettergi.pocket.pathing.input.TouchClient
+import com.bettergi.pocket.pathing.input.TouchReleaseException
 import com.bettergi.pocket.pathing.minimap.MiniMapLocator
-import com.bettergi.pocket.pathing.model.PathingRoutes
+import com.bettergi.pocket.pathing.settings.PathingRouteSource
 import com.bettergi.pocket.pathing.navigation.Navigation
 import com.bettergi.pocket.pathing.settings.PathingSettings
 import com.bettergi.pocket.pathing.tp.BigMapUi
@@ -36,16 +38,22 @@ class PathingController(
     private val onRouteChanged: (Boolean) -> Unit = {},
     private val captureSize: () -> Pair<Int, Int>? = { null },
     private val pathingSettings: () -> PathingSettings = { PathingSettings() },
-    private val loadRoutes: () -> List<Pair<String, String>> = { emptyList() },
+    private val loadRoutes: () -> List<PathingRouteSource> = { emptyList() },
     private val touch: TouchClient = AccessibilityTouchClient,
     private val vision: PathingVision = UnavailablePathingVision,
     private val bigMap: BigMapUi = UnavailableBigMapUi,
+    private val partyAssets: android.content.res.AssetManager? = null,
 ) {
     private val lock = Any()
     private var runtime: PathingRuntime? = null
     private var worker: Thread? = null
 
     private var job = Job.None
+    private var routeAfterReadout = false
+
+    fun isRouteRunning(): Boolean = synchronized(lock) { job == Job.Route }
+
+    fun isReadoutRunning(): Boolean = synchronized(lock) { job == Job.Readout }
 
     fun toggleReadout() {
         synchronized(lock) {
@@ -78,7 +86,8 @@ class PathingController(
     fun startRoute() {
         synchronized(lock) {
             if (job == Job.Readout) {
-                log("坐标显示还在运行，请先停止显示")
+                routeAfterReadout = true
+                stopLocked()
                 return
             }
             if (worker?.isAlive == true) {
@@ -91,6 +100,7 @@ class PathingController(
 
     fun stop() {
         synchronized(lock) {
+            routeAfterReadout = false
             stopLocked()
         }
     }
@@ -128,6 +138,7 @@ class PathingController(
                 LocationReadout(
                     runtime = runtime,
                     layout = layout,
+                    matchMethod = pathingSettings().mapMatchingMethod.value,
                     genshinInForeground = genshinInForeground,
                     log = log,
                     onStatus = onStatus,
@@ -139,14 +150,19 @@ class PathingController(
                 onStatus("定位中断")
             } finally {
                 TaskGate.exclusiveRunning = false
-                job = Job.None
+                onReadoutChanged(false)
+                onStatus("已停止")
                 synchronized(lock) {
                     if (this.runtime === runtime) {
                         this.runtime = null
+                        worker = null
+                        job = Job.None
+                        if (routeAfterReadout) {
+                            routeAfterReadout = false
+                            startRouteLocked()
+                        }
                     }
                 }
-                onReadoutChanged(false)
-                onStatus("已停止")
             }
         }, WORKER_NAME)
         worker = thread
@@ -198,28 +214,26 @@ class PathingController(
             onStatus(message)
             return
         }
-        val routes = try {
-            loadRoutes()
-        } catch (e: Exception) {
-            val message = "无法读取路线：${e.message ?: e.javaClass.simpleName}"
-            log(message)
-            onStatus(message)
-            return
-        }
-        if (routes.isEmpty()) {
-            log("还没选择路线")
-            onStatus("还没选择路线")
-            return
-        }
         val runtime = PathingRuntime(frames, stopCheck = { routeStopReason() })
         this.runtime = runtime
         TaskGate.exclusiveRunning = true
         job = Job.Route
         onRouteChanged(true)
-        onStatus(routes.first().first)
+        onStatus("正在释放触点…")
         val thread = Thread({
             var outcome: String? = null
             try {
+                if (!touch.releaseAllAndWait()) throw TouchReleaseException()
+                runtime.delay(0)
+                log("任务开始前已释放触点")
+                onStatus("正在读取路线…")
+                val routes = loadRoutes()
+                runtime.delay(0)
+                if (routes.isEmpty()) {
+                    outcome = "还没选择路线"
+                    log(outcome)
+                    return@Thread
+                }
                 val input = GameInput(layout, size.first, size.second, touch)
                 val locator = MiniMapLocator(layout.miniMap!!)
                 val points = try {
@@ -240,43 +254,37 @@ class PathingController(
                     log = log,
                 )
                 val settings = pathingSettings()
-                var completed = 0
-                var failure: String? = null
-                for ((name, json) in routes) {
-                    if (runtime.cancelled) break
-                    onStatus(name)
-                    log("开始路线 $name")
-                    val route = try {
-                        PathingRoutes.parse(json)
-                    } catch (e: Exception) {
-                        val reason = "$name 无法解析：${e.message ?: e.javaClass.simpleName}"
-                        failure = reason
-                        log(reason)
-                        continue
-                    }
+                val summary = RouteBatchRunner({ runtime.delay(0) }, log, onStatus).run(routes) { route ->
                     // 每条路线一个执行器，卡死次数和跳过状态不跨路线（BGI 每条路线 new PathExecutor）
-                    val executor = PathExecutor(
-                        runtime = runtime,
-                        input = input,
-                        locator = locator,
-                        settings = settings,
-                        vision = vision,
-                        teleport = teleport,
-                        log = log,
-                    )
-                    val result = executor.execute(route)
-                    if (result.isSuccess) {
-                        completed++
-                        log("$name 完成")
-                    } else {
-                        // 与 BGI 调度一致：一条失败不影响后面的路线，停止时才退出
-                        val reason = result.errorMessage ?: "未知原因"
-                        failure = reason
-                        log("$name 未完成：$reason")
-                    }
+                    val needsParty = settings.needsParty ||
+                        route.waypoints.any { it.action?.let(com.bettergi.pocket.pathing.party.PathingParty::elementFor) != null }
+                    val catalog = if (needsParty) com.bettergi.pocket.pathing.party.AvatarCatalog.load(
+                        partyAssets ?: error("队伍识别资源未初始化")) else null
+                    val classifier = catalog?.let { com.bettergi.pocket.pathing.party.NcnnAvatarClassifier(partyAssets!!, it) }
+                    try {
+                        val party = classifier?.let { com.bettergi.pocket.pathing.party.PathingParty(
+                            runtime, input, com.bettergi.pocket.pathing.party.PartyRecognition(layout, it), settings, vision, log) }
+                        val executor = PathExecutor(
+                            runtime = runtime,
+                            input = input,
+                            locator = locator,
+                            settings = settings,
+                            vision = vision,
+                            teleport = teleport,
+                            log = log,
+                            party = party,
+                        )
+                        try {
+                            executor.execute(route)
+                        } finally {
+                            input.releaseAll()
+                        }
+                    } finally { classifier?.close() }
                 }
-                if (routes.size > 1) log("路线执行结束：完成 $completed / ${routes.size}")
-                outcome = failure
+                outcome = summary.message
+            } catch (e: TouchReleaseException) {
+                outcome = e.message
+                log(e.message ?: "触点释放未确认")
             } catch (e: CancellationException) {
                 // 用户停止或外部条件打断
             } catch (_: InterruptedException) {
@@ -293,7 +301,10 @@ class PathingController(
                     log("地图追踪已停止：$it")
                     outcome = it
                 }
-                touch.releaseAll()
+                if (!touch.releaseAllAndWait()) {
+                    outcome = TouchReleaseException().message
+                    log(outcome ?: "触点释放未确认")
+                }
                 Navigation.release()
                 TaskGate.exclusiveRunning = false
                 job = Job.None

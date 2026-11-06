@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="58dp" android:gravity="center_vertical"
+    android:paddingHorizontal="4dp" android:background="?android:attr/selectableItemBackground">
+    <CheckBox android:id="@+id/avatar_option_check" android:layout_width="36dp" android:layout_height="match_parent"
+        android:buttonTint="@color/overlay_gold" android:clickable="false" android:focusable="false"
+        android:importantForAccessibility="no" />
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+        <TextView android:id="@+id/avatar_option_name" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="14sp" android:textColor="@color/overlay_text" />
+        <TextView android:id="@+id/avatar_option_detail" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="11sp" android:textColor="@color/overlay_text_muted" android:maxLines="1" android:ellipsize="end" />
+    </LinearLayout>
+    <TextView android:id="@+id/avatar_option_up" style="@style/PathingWindowAction" android:layout_width="36dp"
+        android:contentDescription="提高优先级" android:text="↑" />
+    <TextView android:id="@+id/avatar_option_down" style="@style/PathingWindowAction" android:layout_width="36dp"
+        android:contentDescription="降低优先级" android:text="↓" />
+</LinearLayout>

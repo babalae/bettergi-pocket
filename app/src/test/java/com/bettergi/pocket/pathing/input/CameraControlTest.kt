@@ -14,6 +14,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CameraControlTest {
+    @Test(expected = TouchReleaseException::class)
+    fun `game input requires confirmed release even when submission succeeds`() {
+        val client = object : TouchClient by idleClient() {
+            override fun releaseAll() = true
+            override fun releaseAllAndWait(timeoutMs: Long) = false
+        }
+        GameInput(PathingLayout(referenceSize = null, miniMap = null), 1000, 1000, client).releaseAll()
+    }
+
     @Test
     fun `angle diff matches the BetterGI wrap`() {
         assertEquals(90f, CameraControl.angleDiff(90f, 0f))
@@ -133,6 +142,32 @@ class CameraControlTest {
         assertEquals(listOf("begin 450,250", "step 444,250"), calls.takeLast(2))
         input.releaseView()
         assertEquals("end", calls.last())
+    }
+
+    @Test
+    fun `camera corrections scale reference gain to native pixels`() {
+        val layout = PathingLayout(
+            referenceSize = IntSize(1000, 1000), miniMap = null,
+            viewArea = ViewAreaLayout(IntRect(250, 250, 500, 500)), cameraGain = 0.3,
+        )
+        val cases = listOf(
+            Triple(IntSize(1000, 1000), 500 to 500, 6),
+            Triple(IntSize(500, 500), 250 to 250, 3),
+            Triple(IntSize(2000, 2000), 1000 to 1000, 12),
+            Triple(IntSize(1200, 500), 600 to 250, 3),
+            Triple(IntSize(500, 1200), 250 to 600, 3),
+        )
+        for ((size, start, pixels) in cases) {
+            val points = ArrayList<Pair<Int, Int>>()
+            val client = object : TouchClient by idleClient() {
+                override fun dragBegin(x: Int, y: Int): Boolean { points += x to y; return true }
+                override fun dragStep(x: Int, y: Int, durationMs: Long): Boolean { points += x to y; return true }
+            }
+            val input = GameInput(layout, size.width, size.height, client)
+            assertTrue(input.rotateByDiff(-10f).succeeded)
+            assertTrue(input.rotateByDiff(10f).succeeded)
+            assertEquals("画面 $size", listOf(start, start.first + pixels to start.second, start), points)
+        }
     }
 
     @Test
