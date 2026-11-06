@@ -1,7 +1,6 @@
 package com.bettergi.pocket.pathing.model
 
 import com.bettergi.pocket.pathing.PathingTestData
-import com.bettergi.pocket.pathing.vision.activePartySlot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -59,14 +58,6 @@ class PathingRouteTest {
         val points = PathingRoutes.segment(route).single()
         assertFalse(PathingRoutes.isTargetPoint(points[0]))
         assertTrue(PathingRoutes.isTargetPoint(points[1]))
-    }
-
-    @Test
-    fun `active party slot is the signature that appears once`() {
-        assertEquals(2, activePartySlot(listOf(1, 9, 1, 1)))
-        assertNull(activePartySlot(listOf(1, 1, 1, 1)))
-        assertNull(activePartySlot(listOf(1, 2, 3, 4)))
-        assertNull(activePartySlot(null))
     }
 
     companion object {

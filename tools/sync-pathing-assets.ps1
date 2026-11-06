@@ -12,12 +12,16 @@
     Assets\Map\Teyvat\Teyvat_0_256_SIFT.*        大地图 SIFT（传送）
     Assets\Map\Teyvat\Teyvat_0_2048_SIFT.*       小地图 SIFT（路线 map_match_method = SIFT）
     GameTask\AutoTrackPath\Assets\tp.json        传送点
+    bettergi-scripts-list\repo\pathing\**\*.json 路线 JSON，打进 assets/pathing/routes（不进 git）
 
 .PARAMETER BgiBuildDir
   BetterGI 编译输出目录。
+.PARAMETER RouteDir
+  地图追踪路线 JSON 根目录。
 #>
 param(
-    [string]$BgiBuildDir = "E:\HuiPrograming\MainProject\better-genshin-impact\BetterGenshinImpact\bin\Debug\net10.0-windows10.0.22621.0"
+    [string]$BgiBuildDir = "E:\HuiPrograming\MainProject\better-genshin-impact\BetterGenshinImpact\bin\x64\Debug\net10.0-windows10.0.22621.0",
+    [string]$RouteDir = "E:\HuiPrograming\MainProject\bettergi-scripts-list\repo\pathing"
 )
 
 $ErrorActionPreference = "Stop"
@@ -47,6 +51,37 @@ foreach ($file in $teyvatFiles) {
 }
 Copy-Item -LiteralPath $srcTp -Destination (Join-Path $destRoot "tp.json") -Force
 
+$routeCount = 0
+$indexLines = New-Object System.Collections.Generic.List[string]
+if (Test-Path $RouteDir) {
+    $RouteDir = (Resolve-Path -LiteralPath $RouteDir).Path.TrimEnd('\', '/')
+    $destRoutes = Join-Path $destRoot "routes"
+    if (Test-Path -LiteralPath $destRoutes) {
+        # 清理旧路线前确认最终路径仍位于本仓库资源目录，拒绝链接或意外路径。
+        $resolvedRoutes = (Resolve-Path -LiteralPath $destRoutes).Path
+        $expectedRoutes = [IO.Path]::GetFullPath((Join-Path $repoRoot "app\src\main\assets\pathing\routes"))
+        if ($resolvedRoutes -ne $expectedRoutes -or
+            ((Get-Item -LiteralPath $resolvedRoutes).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "拒绝清理非预期路线目录：$resolvedRoutes"
+        }
+        Remove-Item -LiteralPath $resolvedRoutes -Recurse -Force
+    }
+    Get-ChildItem -LiteralPath $RouteDir -Recurse -File -Filter *.json | ForEach-Object {
+        $rel = $_.FullName.Substring($RouteDir.Length).TrimStart('\', '/').Replace('\', '/')
+        $target = Join-Path $destRoutes ($rel.Replace('/', '\'))
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+        Copy-Item -LiteralPath $_.FullName -Destination $target -Force
+        $indexLines.Add($rel)
+        $script:routeCount++
+    }
+    $indexLines.Sort([StringComparer]::Ordinal)
+    $indexPath = Join-Path $destRoot "routes-index.txt"
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllLines($indexPath, $indexLines.ToArray(), $utf8)
+} else {
+    Write-Warning "找不到路线目录：$RouteDir"
+}
+
 # 清单：相对路径、字节数、SHA-256，便于核对与来源一致
 $manifest = Join-Path $destRoot "MANIFEST.txt"
 $lines = @(
@@ -54,7 +89,9 @@ $lines = @(
     "# 生成时间：$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))",
     "# 相对路径`t字节数`tSHA-256"
 )
-Get-ChildItem $destRoot -Recurse -File | Where-Object { $_.Name -ne "MANIFEST.txt" -and $_.Name -ne "layout.json" } |
+Get-ChildItem $destRoot -Recurse -File | Where-Object {
+    $_.Name -ne "MANIFEST.txt" -and $_.Name -ne "layout.json" -and $_.Name -ne "routes-index.txt" -and $_.FullName -notlike "*\routes\*"
+} |
     Sort-Object FullName | ForEach-Object {
         $rel = $_.FullName.Substring($destRoot.Length + 1).Replace('\', '/')
         $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -63,4 +100,4 @@ Get-ChildItem $destRoot -Recurse -File | Where-Object { $_.Name -ne "MANIFEST.tx
 Set-Content -LiteralPath $manifest -Value $lines -Encoding UTF8
 
 $total = (Get-ChildItem $destRoot -Recurse -File | Measure-Object Length -Sum).Sum
-Write-Host ("已复制 {0} 个文件，共 {1:N1} MiB -> {2}" -f ($teyvatFiles.Count + 1), ($total / 1MB), $destRoot)
+Write-Host ("已复制地图 {0} 个文件、路线 {1} 个，共 {2:N1} MiB -> {3}" -f ($teyvatFiles.Count + 1), $routeCount, ($total / 1MB), $destRoot)

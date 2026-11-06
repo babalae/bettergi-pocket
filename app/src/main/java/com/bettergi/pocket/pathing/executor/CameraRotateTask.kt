@@ -29,27 +29,33 @@ class CameraRotateTask(
         return diff
     }
 
-    fun waitUntilRotatedTo(targetOrientation: Int, maxDiff: Int, maxTryTimes: Int = 50): Boolean {
+    fun waitUntilRotatedTo(targetOrientation: Int, maxDiff: Int, maxTryTimes: Int = 160): Boolean {
         var count = 0
-        while (!runtime.cancelled) {
-            val frame = runtime.nextFrame(LocationReport.FRESH_FRAME_TIMEOUT_MS) ?: return false
-            try {
-                val miniMap = locator.extract(frame.bgr) ?: return false
+        try {
+            while (!runtime.cancelled) {
+                val frame = runtime.nextFrame(LocationReport.FRESH_FRAME_TIMEOUT_MS) ?: return false
                 try {
-                    if (abs(rotateToApproach(targetOrientation, miniMap)) < maxDiff) return true
+                    val miniMap = locator.extract(frame.bgr) ?: return false
+                    try {
+                        if (abs(rotateToApproach(targetOrientation, miniMap)) < maxDiff) return true
+                    } finally {
+                        miniMap.release()
+                    }
                 } finally {
-                    miniMap.release()
+                    frame.bgr.release()
                 }
-            } finally {
-                frame.bgr.release()
+                if (count >= maxTryTimes) {
+                    log("视角转动到目标角度超时，停止转动")
+                    return false
+                }
+                // PC 鼠标位移即时完成；触屏滑动有持续时间，先等笔画和游戏响应，再读下一帧。
+                // 手机默认最多约 24 秒，允许慢设备完成连续触控和小角度微调。
+                runtime.delay(CameraControl.SWIPE_MS + 50)
+                count++
             }
-            if (count > maxTryTimes) {
-                log("视角转动到目标角度超时，停止转动")
-                return false
-            }
-            runtime.delay(50)
-            count++
+            return false
+        } finally {
+            input.releaseView()
         }
-        return false
     }
 }

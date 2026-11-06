@@ -9,7 +9,9 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import android.widget.Toast
+import com.bettergi.pocket.BuildConfig
 import com.bettergi.pocket.MainActivity
 import com.bettergi.pocket.R
 import com.bettergi.pocket.capture.CapturePermissionActivity
@@ -25,8 +27,13 @@ import com.bettergi.pocket.pathing.PathingController
 import com.bettergi.pocket.pathing.PathingLayout
 import com.bettergi.pocket.pathing.PathingRouteActivity
 import com.bettergi.pocket.pathing.executor.ScreenCaptureFrameSource
+import com.bettergi.pocket.pathing.input.PassthroughTouchClient
 import com.bettergi.pocket.pathing.map.MapManager
 import com.bettergi.pocket.pathing.settings.PathingRouteStore
+import java.io.File
+import com.bettergi.pocket.pathing.tp.UnavailableBigMapUi
+import com.bettergi.pocket.pathing.vision.PhoneHud
+import com.bettergi.pocket.pathing.vision.UnavailablePathingVision
 import com.bettergi.pocket.pathing.settings.PathingSettingsRepository
 import com.bettergi.pocket.recognition.RecognitionAssets
 import com.bettergi.pocket.settings.TriggerSettings
@@ -104,6 +111,7 @@ class TriggerForegroundService : Service() {
         )
         pathingSettingsRepository = PathingSettingsRepository(applicationContext)
         pathingRouteStore = PathingRouteStore(applicationContext)
+        val phoneHud = loadPhoneHud(recognitionAssets)
         pathingController = PathingController(
             frames = ScreenCaptureFrameSource(captureController),
             loadLayout = {
@@ -118,27 +126,13 @@ class TriggerForegroundService : Service() {
             captureSize = { captureController.capturedSize() },
             pathingSettings = { pathingSettingsRepository.get() },
             loadRoutes = { pathingRouteStore.readRoutes() },
+            vision = phoneHud ?: UnavailablePathingVision,
+            bigMap = phoneHud ?: UnavailableBigMapUi,
+            touch = PassthroughTouchClient(overlayController),
         )
         overlayController.onPathingToggle = { pathingController.toggleReadout() }
         overlayController.onPathingStart = { pathingController.startRoute() }
-        overlayController.onPickRouteFile = { openRoutePicker(folder = false) }
-        overlayController.onPickRouteFolder = { openRoutePicker(folder = true) }
-        overlayController.onCycleMainAvatar = {
-            pathingSettingsRepository.cycleMainAvatar()
-            refreshPathingPanel()
-        }
-        overlayController.onCycleGuardianAvatar = {
-            pathingSettingsRepository.cycleGuardianAvatar()
-            refreshPathingPanel()
-        }
-        overlayController.onCycleSkillInterval = {
-            pathingSettingsRepository.cycleSkillInterval()
-            refreshPathingPanel()
-        }
-        overlayController.onToggleLongPress = {
-            pathingSettingsRepository.toggleLongPress()
-            refreshPathingPanel()
-        }
+        overlayController.onPickRoute = { openRoutePicker() }
         overlayController.onCycleGadget = {
             pathingSettingsRepository.cycleGadgetInterval()
             refreshPathingPanel()
@@ -156,17 +150,43 @@ class TriggerForegroundService : Service() {
                 InputAccessibilityService.promptIfDisconnected(applicationContext)
             }
             ACTION_PATHING_ROUTE -> refreshPathingPanel()
+            ACTION_DEBUG_READOUT -> if (BuildConfig.DEBUG) {
+                Log.d(TAG, "debug: start readout")
+                if (!captureController.isRunning()) {
+                    Log.w(TAG, "debug: screen capture is not running")
+                }
+                startInForeground(sharing = captureController.isRunning())
+                overlayController.show()
+                pathingController.startReadout()
+            }
+            ACTION_DEBUG_ROUTE -> if (BuildConfig.DEBUG) {
+                val path = intent.getStringExtra(EXTRA_ROUTE_PATH)
+                val file = path?.let(::File)
+                Log.i(TAG, "debug route path=$path exists=${file?.isFile == true}")
+                if (file == null || !file.isFile) {
+                    overlayController.log("找不到路线文件：${path ?: "未指定"}")
+                } else {
+                    pathingRouteStore.useFile(file)
+                    overlayController.log("调试路线 ${file.name}")
+                    pathingController.startRoute()
+                }
+            }
+            ACTION_DEBUG_PATHING_STOP -> if (BuildConfig.DEBUG) {
+                Log.d(TAG, "debug: stop pathing")
+                pathingController.stop()
+            }
+            ACTION_DEBUG_CAPTURE -> if (BuildConfig.DEBUG) {
+                Log.d(TAG, "debug: request capture permission")
+                startInForeground(sharing = captureController.isRunning())
+                overlayController.show()
+                requestCapturePermission()
+            }
             ACTION_STOP -> {
                 shutdown()
                 stopSelf()
             }
             ACTION_CAPTURE_RESULT -> {
                 requestingCapturePermission = false
-                if (!settingsRepository.get().screenShareEnabled) {
-                    captureController.stop()
-                    startInForeground(sharing = false)
-                    return START_STICKY
-                }
                 val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
                 val resultData =
                     if (Build.VERSION.SDK_INT >= 33) {
@@ -175,16 +195,32 @@ class TriggerForegroundService : Service() {
                         @Suppress("DEPRECATION")
                         intent.getParcelableExtra(EXTRA_RESULT_DATA)
                     }
+                Log.d(
+                    TAG,
+                    "capture result code=$resultCode data=${resultData != null} enabled=${settingsRepository.get().screenShareEnabled}",
+                )
+                val enabled = settingsRepository.get().screenShareEnabled
+                if (!enabled && !BuildConfig.DEBUG) {
+                    captureController.stop()
+                    startInForeground(sharing = false)
+                    return START_STICKY
+                }
                 if (resultData != null) {
                     startInForeground(sharing = true)
                     captureController.start(resultCode, resultData)
+                    if (!enabled) {
+                        // 调试入口可能绕过开关；开始捕获后补写开关，监听器此时只会启动引擎。
+                        settingsRepository.setScreenShareEnabled(true)
+                    }
                     engine.start()
                     InputAccessibilityService.ensureEnabled(applicationContext)
+                    Log.d(TAG, "capture started running=${captureController.isRunning()}")
                 } else {
                     settingsRepository.setScreenShareEnabled(false)
                 }
             }
             ACTION_CAPTURE_DENIED -> {
+                Log.d(TAG, "capture denied")
                 requestingCapturePermission = false
                 settingsRepository.setScreenShareEnabled(false)
             }
@@ -231,10 +267,9 @@ class TriggerForegroundService : Service() {
         overlayController.showPathing(pathingRouteStore.label(), pathingSettingsRepository.get())
     }
 
-    private fun openRoutePicker(folder: Boolean) {
+    private fun openRoutePicker() {
         val intent = Intent(this, PathingRouteActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            .putExtra(PathingRouteActivity.EXTRA_FOLDER, folder)
         startActivity(intent)
     }
 
@@ -291,6 +326,16 @@ class TriggerForegroundService : Service() {
         }
     }
 
+    private fun loadPhoneHud(recognitionAssets: RecognitionAssets): PhoneHud? {
+        return try {
+            val source = MapManager.assets ?: return null
+            PhoneHud.load(applicationContext.assets, PathingLayout.load(source), recognitionAssets)
+        } catch (e: Exception) {
+            Log.w(TAG, "地图追踪界面模板没有加载", e)
+            null
+        }
+    }
+
     private fun createNotificationChannelIfNeeded() {
         if (Build.VERSION.SDK_INT < 26) return
         val manager = getSystemService(NotificationManager::class.java)
@@ -310,6 +355,15 @@ class TriggerForegroundService : Service() {
         const val ACTION_CAPTURE_RESULT = "com.bettergi.pocket.action.CAPTURE_RESULT"
         const val ACTION_CAPTURE_DENIED = "com.bettergi.pocket.action.CAPTURE_DENIED"
         const val ACTION_PATHING_ROUTE = "com.bettergi.pocket.action.PATHING_ROUTE"
+
+        /** 仅 Debug：ADB 广播直接启动坐标显示/停止，便于真机回归。 */
+        const val ACTION_DEBUG_READOUT = "com.bettergi.pocket.debug.PATHING_READOUT"
+        const val ACTION_DEBUG_PATHING_STOP = "com.bettergi.pocket.debug.PATHING_STOP"
+        const val ACTION_DEBUG_CAPTURE = "com.bettergi.pocket.debug.CAPTURE"
+        const val ACTION_DEBUG_ROUTE = "com.bettergi.pocket.debug.PATHING_ROUTE"
+        const val EXTRA_ROUTE_PATH = "extra_route_path"
+
+        private const val TAG = "BetterGIPocket"
 
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_RESULT_DATA = "extra_result_data"

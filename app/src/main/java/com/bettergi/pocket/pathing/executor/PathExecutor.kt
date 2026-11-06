@@ -43,7 +43,6 @@ class PathExecutor(
     private val nowMs: () -> Long = { SystemClock.elapsedRealtime() },
 ) {
     private val rotate = CameraRotateTask(runtime, input, locator, log)
-    private val party = PartyControl(runtime, input, settings, vision, log, nowMs)
     private val trap = TrapEscaper(runtime, input, rotate, vision, ::locate, log, nowMs)
 
     private var inTrap = 0
@@ -121,6 +120,11 @@ class PathExecutor(
                             }
                         }
                     }
+                    if (segment.last().kind != WaypointKind.Teleport) {
+                        input.releaseAll()
+                        log("路径段结束，停留拾取")
+                        EndpointPickup.collect(runtime::delay, ::pickup)
+                    }
                     completed = true
                     break
                 } catch (e: HandledException) {
@@ -179,8 +183,6 @@ class PathExecutor(
     }
 
     private fun moveTo(waypoint: WaypointForTrack) {
-        party.switchTo(settings.mainAvatarIndex)
-        val switchedAt = nowMs()
         var sample = sample(waypoint)
         var position = sample.point
         var extraMs = sample.extraMs
@@ -304,15 +306,6 @@ class PathExecutor(
                     }
                     MoveMode.Climb -> Unit
                     else -> {
-                        if (distance > 10 && settings.guardianAvatarIndex != null && party.skillIntervalElapsed()) {
-                            if (nowMs() - switchedAt < 1000L &&
-                                settings.mainAvatarIndex != null &&
-                                settings.guardianAvatarIndex != settings.mainAvatarIndex
-                            ) {
-                                runtime.delay(800)
-                            }
-                            party.useGuardianSkill(walking = true)
-                        }
                         if (distance > 20 && PathingSettings.AUTO_RUN && nowMs() - lastSprintAt > 2500L) {
                             lastSprintAt = nowMs()
                             input.tapButton(GameButton.Sprint)
@@ -333,6 +326,7 @@ class PathExecutor(
                 screen?.bgr?.release()
             }
         }
+        input.releaseView()
         input.releasePad()
         input.releaseButton(GameButton.Sprint)
     }

@@ -82,6 +82,14 @@ class CameraControlTest {
         assertEquals(IntRect(400, 200, 500, 600), parsed.viewArea!!.bbox)
         assertEquals(900, parsed.buttons[GameButton.Jump]!!.x)
         assertEquals(1.5, parsed.cameraGain!!, 0.0)
+
+        val zoomed = PathingLayout.parse(
+            """{"referenceSize":[3040,1904],"regionButton":[2665,1750],"mapZoom":{"knobX":94,"zoomInY":762,"zoomOutY":1142}}""",
+        )
+        assertEquals(2665, zoomed.regionButton!!.x)
+        assertEquals(1.0, zoomed.mapZoom!!.level(762.0), 1e-9)
+        assertEquals(6.0, zoomed.mapZoom!!.level(1142.0), 1e-9)
+        assertEquals(3.5, zoomed.mapZoom!!.level(952.0), 1e-9)
     }
 
     @Test
@@ -100,6 +108,31 @@ class CameraControlTest {
         assertTrue(input.tapButton(GameButton.Jump) is InputResult.Ok)
         assertEquals("tap 1100,800", calls.single())
         assertTrue(input.rotateByDiff(10f) is InputResult.NotCalibrated)
+    }
+
+    @Test
+    fun `camera corrections continue one drag and release at the edge`() {
+        val calls = ArrayList<String>()
+        val client = object : TouchClient by idleClient() {
+            override fun dragBegin(x: Int, y: Int): Boolean { calls += "begin $x,$y"; return true }
+            override fun dragStep(x: Int, y: Int, durationMs: Long): Boolean { calls += "step $x,$y"; return true }
+            override fun dragEnd(): Boolean { calls += "end"; return true }
+        }
+        val layout = PathingLayout(
+            referenceSize = IntSize(1000, 1000), miniMap = null,
+            viewArea = ViewAreaLayout(IntRect(400, 200, 100, 100)), cameraGain = 0.3,
+        )
+        val input = GameInput(layout, 1000, 1000, client)
+        input.rotateByDiff(-10f)
+        input.rotateByDiff(-10f)
+        assertEquals(listOf("begin 450,250", "step 456,250", "step 462,250"), calls)
+        input.rotateByDiff(-100f)
+        input.rotateByDiff(-100f)
+        assertEquals("end", calls.last())
+        input.rotateByDiff(10f)
+        assertEquals(listOf("begin 450,250", "step 444,250"), calls.takeLast(2))
+        input.releaseView()
+        assertEquals("end", calls.last())
     }
 
     @Test

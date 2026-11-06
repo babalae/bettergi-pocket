@@ -96,6 +96,15 @@ class InputAccessibilityService : AccessibilityService() {
         private var lastAppPackage: String? = null
 
         @Volatile
+        private var usageCacheAt = 0L
+
+        @Volatile
+        private var usageCachePackage: String? = null
+
+        private const val USAGE_CACHE_MS = 1000L
+        private const val USAGE_LOOKBACK_MS = 6 * 60 * 60 * 1000L
+
+        @Volatile
         private var appContext: Context? = null
 
         private val recoverHandler = Handler(Looper.getMainLooper())
@@ -120,10 +129,42 @@ class InputAccessibilityService : AccessibilityService() {
 
         /** `true`/`false` 表示原神是否在前台；无障碍未连接或尚未观察到窗口时为 `null`。 */
         fun isGenshinInForeground(): Boolean? {
-            val (connected, pkg) = currentStatus()
-            if (!connected) return null
-            val name = pkg ?: return null
-            return GenshinPackages.isGenshinPackage(name)
+            if (!isConnected()) return null
+            usageForegroundPackage()?.let { pkg ->
+                val playing = GenshinPackages.isGenshinPackage(pkg)
+                if (!playing) Log.i("BetterGI.Pathing", "foreground package=$pkg")
+                return playing
+            }
+            // 游戏窗口经常没有无障碍事件。没有使用情况记录时不要用过期包名把原神判成后台。
+            return null
+        }
+
+        /**
+         * 通过 UsageStats 取最近一个回到前台的普通应用。无障碍事件对游戏常常不触发，
+         * 悬浮窗/系统弹窗又会把 lastAppPackage 冲掉，这里作为主判据。
+         * 游戏窗口常常没有可读取的无障碍节点，不能直接从活跃窗口可靠取包名。
+         * 未授予“使用情况访问”时返回 null，不回退到可能已过期的无障碍事件。
+         */
+        private fun usageForegroundPackage(): String? {
+            val now = SystemClock.elapsedRealtime()
+            if (now - usageCacheAt < USAGE_CACHE_MS) return usageCachePackage
+            val context = instance ?: appContext ?: return null
+            val manager = context.getSystemService(android.app.usage.UsageStatsManager::class.java)
+                ?: return null
+            val end = System.currentTimeMillis()
+            val events = manager.queryEvents(end - USAGE_LOOKBACK_MS, end) ?: return null
+            val event = android.app.usage.UsageEvents.Event()
+            var last: String? = null
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                if (event.eventType != android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) continue
+                val pkg = event.packageName ?: continue
+                if (pkg == context.packageName || pkg in TRANSIENT_PACKAGES) continue
+                last = pkg
+            }
+            usageCacheAt = now
+            usageCachePackage = last
+            return last
         }
 
         fun isEnabledInSettings(context: Context): Boolean {
@@ -294,12 +335,6 @@ class InputAccessibilityService : AccessibilityService() {
         fun dragEnd(): Boolean = call(METHOD_DRAG_END) { it.dragEnd() }
 
         fun releaseAllTouches(): Boolean = call(METHOD_RELEASE_ALL) { it.releaseAll() }
-
-        private fun currentStatus(): Pair<Boolean, String?> {
-            if (instance != null) return true to lastAppPackage
-            val status = remoteStatus() ?: return false to null
-            return status.getBoolean(KEY_CONNECTED, false) to status.getString(KEY_LAST_PACKAGE)
-        }
 
         private fun clickLocal(x: Int, y: Int, durationMs: Long): Boolean {
             return composer()?.tap(x, y, durationMs) == true

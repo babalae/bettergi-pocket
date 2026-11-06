@@ -1,5 +1,6 @@
 *.iml
 .gradle
+.kotlin/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -21,5 +22,12 @@ tmp-opencv-desktop.jar
 # 地图追踪资源由 tools/sync-pathing-assets.ps1 从 BetterGI 编译目录复制（约 185 MiB），不进 git
 /app/src/main/assets/pathing/Map/
 /app/src/main/assets/pathing/tp.json
+/app/src/main/assets/pathing/routes/
+/app/src/main/assets/pathing/routes-index.txt
+/pathing-routes/
 /tools/bgi-golden/bin/
 /tools/bgi-golden/obj/
+# 真机截图、录像、日志、标定输出和临时调试程序仅保留在本地
+/artifacts/
+# 本机同步资源时生成的校验清单，含本地路径与生成时间
+/app/src/main/assets/pathing/MANIFEST.txt

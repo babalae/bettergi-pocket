@@ -1,6 +1,8 @@
 package com.bettergi.pocket.pathing.tp
 
+import com.bettergi.pocket.pathing.ControlPoint
 import com.bettergi.pocket.pathing.common.Point2f
+import com.bettergi.pocket.recognition.ocr.OcrFactory
 import com.bettergi.pocket.pathing.executor.PathingRuntime
 import com.bettergi.pocket.pathing.input.GameInput
 import com.bettergi.pocket.pathing.map.MapManager
@@ -18,7 +20,7 @@ import kotlin.math.sqrt
 
 /**
  * 传送任务。拖图步进、传送点选择和缩放读数已按 BGI 实现。
- * 大地图按钮、图标和滑条还没有手机模板，[BigMapUi] 看不到界面时会停在对应步骤并说明原因。
+ * 大地图开关、传送图标、滑条和传送按钮使用 [BigMapUi]。看不到对应模板时停在该步并说明原因。
  */
 class MapTeleport(
     private val runtime: PathingRuntime,
@@ -28,6 +30,7 @@ class MapTeleport(
     private val screenHeight: Int,
     private val points: List<TpPoint>,
     private val bigMap: BigMapUi,
+    private val regionButton: ControlPoint? = null,
     private val log: (String) -> Unit,
     private val random: () -> Double = { Math.random() },
 ) : PathingTeleport {
@@ -50,6 +53,7 @@ class MapTeleport(
         }
         log("开始传送：${target.name.ifBlank { "坐标" }} ${target.x}, ${target.y}")
         openBigMap(mapName)
+        switchCountry(target.country)
         dragToward(target.x, target.y, mapName)
         val frame = runtime.nextFrame(500) ?: throw HandledException("打开大地图后没有新画面")
         try {
@@ -81,7 +85,9 @@ class MapTeleport(
                 throw HandledException("地图校正量超过相邻点安全距离")
             }
             input.tapNative(click.first.roundToInt(), click.second.roundToInt())
-            throw HandledException("已点击传送点，但传送按钮和加载完成还没有手机模板")
+            confirmTeleport()
+            waitUntilLoaded()
+            return Point2f(target.x.toFloat(), target.y.toFloat())
         } finally {
             frame.bgr.release()
         }
@@ -95,13 +101,82 @@ class MapTeleport(
         val miniMap = locator ?: throw HandledException("小地图未标定，无法打开大地图")
         val rect = miniMap.nativeRect(screenWidth, screenHeight)
             ?: throw HandledException("小地图不在当前画面内")
-        input.tapNative(rect.centerX, rect.centerY)
+        val tapX = rect.centerX
+        val tapY = rect.centerY
+        val tapped = input.tapNative(tapX, tapY)
+        log(
+            "点小地图 ($tapX, $tapY)，画面 ${screenWidth}×${screenHeight}，" +
+                if (tapped.succeeded) "手势已发出" else "手势没有发出",
+        )
+        if (!tapped.succeeded) {
+            throw HandledException("点小地图失败，手势没有发出")
+        }
         runtime.delay(100)
         repeat(OPEN_MAP_ATTEMPTS) { attempt ->
             if (isBigMapOpen()) return
             if (attempt + 1 < OPEN_MAP_ATTEMPTS) runtime.delay(80)
         }
         throw HandledException("没有识别到大地图。地图界面模板还没标定")
+    }
+
+    /**
+     * 当前画面不在目标国家时，点右下角区域名，OCR 右侧名单再点目标。
+     * 来源：BGI 区域切换。名单文字做「渊下宮 / 蒙徳 / 娜塔」替换。
+     */
+    private fun switchCountry(country: String) {
+        if (country.isBlank()) return
+        val hub = TpCatalog.countryCenters[country] ?: return
+        val center = positionFromBigMap("Teyvat")
+        if (center != null &&
+            !TpCatalog.shouldSwitchCountry(center.x.toDouble(), center.y.toDouble(), hub.first, hub.second)
+        ) {
+            return
+        }
+        val button = regionButton ?: throw HandledException("区域按钮未标定，无法切到 $country")
+        log("切换地区：$country")
+        if (!input.tapCalibrated(button.x, button.y).succeeded) {
+            throw HandledException("点不开区域名单")
+        }
+        runtime.delay(500)
+        repeat(8) {
+            val frame = runtime.nextFrame(400) ?: return@repeat
+            try {
+                val hit = findCountryLabel(frame.bgr, country)
+                if (hit != null) {
+                    input.tapNative(hit.first, hit.second)
+                    runtime.delay(800)
+                    return
+                }
+            } finally {
+                frame.bgr.release()
+            }
+            runtime.delay(200)
+        }
+        throw HandledException("区域名单里没有找到 $country")
+    }
+
+    private fun findCountryLabel(bgr: Mat, country: String): Pair<Int, Int>? {
+        val x0 = (bgr.cols() * 0.62).toInt().coerceIn(0, bgr.cols() - 1)
+        val roi = bgr.submat(0, bgr.rows(), x0, bgr.cols())
+        val result = try {
+            OcrFactory.default.recognize(roi)
+        } finally {
+            roi.release()
+        }
+        var bestX = 0
+        var bestY = 0
+        var bestScore = 0
+        for (region in result.regions) {
+            val text = TpCatalog.normalizeAreaName(region.text)
+            val score = TpCatalog.nameOverlap(text, country)
+            if (score > bestScore) {
+                bestScore = score
+                bestX = x0 + region.rect.centerX
+                bestY = region.rect.centerY
+            }
+        }
+        if (bestScore < country.length) return null
+        return bestX to bestY
     }
 
     override fun positionFromBigMap(mapName: String): Point2f? = positionFromBigMap(mapName, null)
@@ -127,11 +202,13 @@ class MapTeleport(
 
     private fun dragToward(targetX: Double, targetY: Double, mapName: String) {
         val start = positionFromBigMap(mapName) ?: throw HandledException("大地图中心没有识别出来")
+        val zoom = readZoom()
+        log("大地图缩放等级 ${"%.2f".format(zoom)}")
         MapDrag.moveToward(
             start = start,
             targetX = targetX,
             targetY = targetY,
-            zoom = 1.0,
+            zoom = zoom,
             // BGI `MoveMapToCore`：用惯性预测的中心做本地 SIFT
             readCenter = { predicted -> positionFromBigMap(mapName, predicted) },
             drag = { dx, dy -> dragBySteps(dx, dy) },
@@ -232,6 +309,61 @@ class MapTeleport(
         }
     }
 
+    private fun readZoom(): Double {
+        val frame = runtime.nextFrame(200) ?: return 1.0
+        try {
+            return bigMap.zoomLevel(frame.bgr) ?: 1.0
+        } finally {
+            frame.bgr.release()
+        }
+    }
+
+    /** 点到传送图标后等面板，再点传送按钮。来源：BGI `WaitForTeleportPanelAndConfirm`。 */
+    private fun confirmTeleport() {
+        runtime.delay(200)
+        repeat(CONFIRM_ATTEMPTS) {
+            val frame = runtime.nextFrame(200) ?: return@repeat
+            try {
+                val button = bigMap.teleportButton(frame.bgr)
+                if (button != null) {
+                    input.tapNative(button.first, button.second)
+                    runtime.delay(30)
+                    return
+                }
+            } finally {
+                frame.bgr.release()
+            }
+            runtime.delay(80)
+        }
+        throw HandledException("点击传送点后没有出现传送按钮")
+    }
+
+    /**
+     * 传送按钮点下去以后，先离开大地图，再连续看到主界面。
+     * 来源：BGI 等加载，最多 600 次、每次 100 ms。
+     */
+    private fun waitUntilLoaded() {
+        var leftMap = false
+        var worldStreak = 0
+        repeat(LOAD_POLLS) {
+            runtime.delay(100)
+            val frame = runtime.nextFrame(200) ?: return@repeat
+            try {
+                val world = bigMap.isWorldUi(frame.bgr)
+                if (!bigMap.isOpen(frame.bgr)) leftMap = true
+                if (leftMap && world) {
+                    worldStreak++
+                    if (worldStreak >= 2) return
+                } else {
+                    worldStreak = 0
+                }
+            } finally {
+                frame.bgr.release()
+            }
+        }
+        throw HandledException("传送后没有回到主界面")
+    }
+
     private fun isBigMapOpen(): Boolean {
         val frame = runtime.nextFrame(200) ?: return false
         try {
@@ -260,6 +392,9 @@ class MapTeleport(
     private companion object {
         /** BGI `WaitForBigMapUiAppear(63)`。 */
         const val OPEN_MAP_ATTEMPTS = 63
+        const val CONFIRM_ATTEMPTS = 24
+        /** BGI 等加载：600 × 100 ms。 */
+        const val LOAD_POLLS = 600
     }
 }
 
@@ -267,6 +402,15 @@ interface BigMapUi {
     fun isOpen(frame: Mat): Boolean
     fun closeButton(frame: Mat): Pair<Int, Int>?
     fun observedIcons(frame: Mat): List<MapIcon> = emptyList()
+
+    /** 传送面板上的传送按钮中心。没有模板或没看到时返回 null。 */
+    fun teleportButton(frame: Mat): Pair<Int, Int>? = null
+
+    /** BGI 缩放等级 1–6。1 是放得最大，6 是缩得最小。读不到滑块时返回 null。 */
+    fun zoomLevel(frame: Mat): Double? = null
+
+    /** 已经回到主界面，并且大地图已经关上。 */
+    fun isWorldUi(frame: Mat): Boolean = false
 }
 
 object UnavailableBigMapUi : BigMapUi {

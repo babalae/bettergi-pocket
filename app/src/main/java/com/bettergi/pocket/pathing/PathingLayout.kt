@@ -30,6 +30,24 @@ import org.json.JSONObject
  */
 data class ControlPoint(val x: Int, val y: Int)
 
+/**
+ * 手机大地图滑条。
+ * [zoomInY] 是「+」一端（放大，BGI 等级 1），[zoomOutY] 是「-」一端（缩小，等级 6）。
+ * 来源：BGI `AdjustMapZoomLevel`「数字变大地图越小」；TB322FC 上把滑块拖向 + 后画面细节变多。
+ */
+data class MapZoomLayout(
+    val knobX: Int,
+    val zoomInY: Int,
+    val zoomOutY: Int,
+) {
+    fun level(knobCenterY: Double): Double {
+        val span = (zoomOutY - zoomInY).toDouble()
+        if (span == 0.0) return 1.0
+        val fraction = ((knobCenterY - zoomInY) / span).coerceIn(0.0, 1.0)
+        return (1.0 + 5.0 * fraction).coerceIn(1.0, 6.0)
+    }
+}
+
 data class JoystickLayout(val centerX: Int, val centerY: Int, val radius: Int)
 
 data class ViewAreaLayout(
@@ -42,12 +60,9 @@ enum class GameButton(val id: String) {
     Drop("drop"),
     Sprint("sprint"),
     Skill("skill"),
+    Burst("burst"),
     Gadget("gadget"),
     Attack("attack"),
-    Party1("party1"),
-    Party2("party2"),
-    Party3("party3"),
-    Party4("party4"),
     ;
 
     companion object {
@@ -62,8 +77,12 @@ data class PathingLayout(
     val viewArea: ViewAreaLayout? = null,
     val buttons: Map<GameButton, ControlPoint> = emptyMap(),
     val pickup: ControlPoint? = null,
+    /** 大地图右下角区域名。点开后右侧出现地区列表。 */
+    val regionButton: ControlPoint? = null,
     /** 视角闭环增益 c，单位是每度多少原生像素。未测定时为 null。 */
     val cameraGain: Double? = null,
+    /** 大地图缩放滑条。上端是放大（等级 1），下端是缩小（等级 6）。 */
+    val mapZoom: MapZoomLayout? = null,
 ) {
     companion object {
         const val FILE_NAME = "layout.json"
@@ -103,12 +122,18 @@ data class PathingLayout(
                 }
             }
             val pickup = root.optJSONArray("pickup")?.let(::parsePoint)
+            val regionButton = root.optJSONArray("regionButton")?.let(::parsePoint)
             val cameraGain = if (root.has("cameraGain") && !root.isNull("cameraGain")) {
                 root.getDouble("cameraGain")
             } else {
                 null
             }
-            return PathingLayout(referenceSize, miniMap, joystick, viewArea, buttons, pickup, cameraGain)
+            val mapZoom = root.optJSONObject("mapZoom")?.let { json ->
+                MapZoomLayout(json.getInt("knobX"), json.getInt("zoomInY"), json.getInt("zoomOutY"))
+            }
+            return PathingLayout(
+                referenceSize, miniMap, joystick, viewArea, buttons, pickup, regionButton, cameraGain, mapZoom,
+            )
         }
 
         private fun parsePoint(array: JSONArray): ControlPoint {

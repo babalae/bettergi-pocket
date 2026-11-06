@@ -429,140 +429,96 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <ScrollView
+            <LinearLayout
                 android:id="@+id/overlay_pathing_extras"
                 android:layout_width="match_parent"
-                android:layout_height="240dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
                 android:visibility="gone">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="10dp"
+                    android:layout_marginEnd="10dp"
+                    android:background="@color/overlay_row_divider" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginStart="10dp"
-                        android:layout_marginEnd="10dp"
-                        android:background="@color/overlay_row_divider" />
+                    android:gravity="center_vertical"
+                    android:minHeight="32dp"
+                    android:orientation="horizontal"
+                    android:paddingStart="12dp"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="2dp">
 
                     <TextView
                         android:id="@+id/overlay_pathing_route"
-                        android:layout_width="match_parent"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:paddingStart="12dp"
-                        android:paddingTop="6dp"
-                        android:paddingEnd="10dp"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="1"
                         android:text="未选择路线"
                         android:textColor="@color/overlay_text"
                         android:textSize="12sp" />
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="10dp"
-                        android:paddingBottom="4dp">
-
-                        <TextView
-                            android:id="@+id/overlay_pathing_pick_file"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:paddingEnd="12dp"
-                            android:text="选择文件"
-                            android:textColor="@color/overlay_gold"
-                            android:textSize="11sp" />
-
-                        <TextView
-                            android:id="@+id/overlay_pathing_pick_folder"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="选择文件夹"
-                            android:textColor="@color/overlay_gold"
-                            android:textSize="11sp" />
-                    </LinearLayout>
-
                     <TextView
-                        android:id="@+id/overlay_pathing_main"
-                        android:layout_width="match_parent"
+                        android:id="@+id/overlay_pathing_pick"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:paddingStart="12dp"
-                        android:paddingTop="2dp"
-                        android:paddingEnd="10dp"
-                        android:text="行走位 无"
-                        android:textColor="@color/overlay_text"
+                        android:paddingStart="8dp"
+                        android:text="选择"
+                        android:textColor="@color/overlay_gold"
                         android:textSize="12sp" />
+                </LinearLayout>
 
-                    <TextView
-                        android:id="@+id/overlay_pathing_guardian"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingStart="12dp"
-                        android:paddingTop="2dp"
-                        android:paddingEnd="10dp"
-                        android:text="生存位 无"
-                        android:textColor="@color/overlay_text"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/overlay_pathing_interval"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingStart="12dp"
-                        android:paddingTop="2dp"
-                        android:paddingEnd="10dp"
-                        android:text="E 间隔 关"
-                        android:textColor="@color/overlay_text"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/overlay_pathing_long_press"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingStart="12dp"
-                        android:paddingTop="2dp"
-                        android:paddingEnd="10dp"
-                        android:text="长按 E 关"
-                        android:textColor="@color/overlay_text"
-                        android:textSize="12sp" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="32dp"
+                    android:orientation="horizontal"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="2dp">
 
                     <TextView
                         android:id="@+id/overlay_pathing_gadget"
-                        android:layout_width="match_parent"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:paddingStart="12dp"
-                        android:paddingTop="2dp"
-                        android:paddingEnd="10dp"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="1"
                         android:text="自动 Z 关"
                         android:textColor="@color/overlay_text"
                         android:textSize="12sp" />
 
                     <TextView
                         android:id="@+id/overlay_pathing_start"
-                        android:layout_width="match_parent"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:paddingStart="12dp"
-                        android:paddingTop="6dp"
-                        android:paddingEnd="10dp"
+                        android:paddingStart="8dp"
                         android:text="开始路线"
                         android:textColor="@color/overlay_gold"
                         android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/overlay_pathing_status"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingStart="12dp"
-                        android:paddingTop="4dp"
-                        android:paddingEnd="10dp"
-                        android:paddingBottom="8dp"
-                        android:text="未开始"
-                        android:textColor="@color/overlay_text_muted"
-                        android:textSize="10sp" />
                 </LinearLayout>
-            </ScrollView>
+
+                <TextView
+                    android:id="@+id/overlay_pathing_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="6dp"
+                    android:text="未开始"
+                    android:textColor="@color/overlay_text_muted"
+                    android:textSize="10sp" />
+            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout

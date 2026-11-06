@@ -6,6 +6,7 @@ import android.graphics.Path
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -22,6 +23,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 2. 新手势第 0 ms 的触点数必须等于上一手势未结束的触点数，所以新笔画从第 1 ms 开始。
  * 3. 续接手势排在上一手势已排期事件之后执行，所以按住段要短，且位置没变时不重复派发。
  * `willContinue` 的笔画结束后触点保持按下，直到续段到来，没有超时。
+ * 4. 等待上一手势的完成回调后才派发下一段。尤其不能用下一个 80 ms 视角滑动
+ *    打断还没结束的滑动；Android 16 会因此残留注入触点，并拒绝后续 DOWN/MOVE。
  */
 class GestureComposer(
     private val service: AccessibilityService,
@@ -44,6 +47,9 @@ class GestureComposer(
     private val fingers = LinkedHashMap<String, Finger>()
     private var generation = 0
     private var externalRestarts = 0
+    private var dispatching = false
+    private var pendingHoldChange = false
+    private val pendingInstants = ArrayDeque<Instant>()
 
     private val renew = Runnable {
         if (fingers.any { !it.value.lift }) {
@@ -84,7 +90,7 @@ class GestureComposer(
     fun tap(x: Int, y: Int, durationMs: Long): Boolean = runSync {
         if (x < 0 || y < 0) return@runSync false
         val duration = durationMs.coerceAtLeast(1L)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || fingers.isEmpty()) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return@runSync dispatchSimple(pointPath(x.toFloat(), y.toFloat()), duration)
         }
         emit(listOf(Instant(pointPath(x.toFloat(), y.toFloat()), duration)))
@@ -94,7 +100,7 @@ class GestureComposer(
         if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0) return@runSync false
         val duration = durationMs.coerceAtLeast(1L)
         val path = movePath(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat())
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || fingers.isEmpty()) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return@runSync dispatchSimple(path, duration)
         }
         emit(listOf(Instant(path, duration)))
@@ -115,6 +121,9 @@ class GestureComposer(
     fun dragEnd(): Boolean = buttonUp(DRAG_ID)
 
     fun releaseAll(): Boolean = runSync {
+        // 停止后不再执行排队的点按或转向；正在执行的笔画完成后立即松开持续触点。
+        pendingInstants.clear()
+        handler.removeCallbacks(renew)
         if (fingers.isEmpty()) return@runSync true
         fingers.values.forEach {
             it.lift = true
@@ -129,8 +138,18 @@ class GestureComposer(
 
     private fun emit(instants: List<Instant> = emptyList()): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        if (dispatching) {
+            pendingInstants.addAll(instants)
+            pendingHoldChange = true
+            return true
+        }
         // 从未派发过的触点抬起时不用派发，否则会变成一次多余的点按
         fingers.values.removeAll { it.lift && it.stroke == null }
+        // AOSP MotionEventInjector 不为静止的继续按住生成 MOVE；空事件列表会回报取消。
+        // willContinue 本身已保留按住状态，只在移动、新增、抬起或有瞬时动作时续接。
+        if (instants.isEmpty() && fingers.values.none {
+                it.stroke == null || it.lift || it.x != it.endX || it.y != it.endY
+            }) return true
         val continuing = fingers.values.any { it.stroke != null }
         val freshStart = if (continuing) FRESH_STROKE_DELAY_MS else 0L
         val instantEnd = instants.maxOfOrNull { freshStart + it.durationMs } ?: 0L
@@ -159,9 +178,14 @@ class GestureComposer(
         }
         generation += 1
         val gen = generation
+        dispatching = true
         val accepted = service.dispatchGesture(
             builder.build(),
             object : AccessibilityService.GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    handler.post { onDispatchCompleted(gen) }
+                }
+
                 override fun onCancelled(gestureDescription: GestureDescription?) {
                     handler.post { onExternalCancel(gen) }
                 }
@@ -169,6 +193,7 @@ class GestureComposer(
             handler,
         )
         if (!accepted) {
+            dispatching = false
             prepared.forEach { it.first.stroke = null }
             return false
         }
@@ -186,8 +211,23 @@ class GestureComposer(
         return true
     }
 
+    /** 连续笔画在完成后仍按下；只在系统确认完成后消费下一个瞬时动作或触点更新。 */
+    private fun onDispatchCompleted(gen: Int) {
+        if (gen != generation) return
+        dispatching = false
+        val instant = pendingInstants.removeFirstOrNull()
+        if (instant != null || pendingHoldChange) {
+            pendingHoldChange = false
+            emit(if (instant == null) emptyList() else listOf(instant))
+        }
+    }
+
     private fun onExternalCancel(gen: Int) {
         if (gen != generation) return
+        dispatching = false
+        pendingInstants.clear()
+        pendingHoldChange = false
+        Log.w("BetterGI.Gesture", "手势被取消，重建持续触点 count=${fingers.size}")
         fingers.values.forEach { it.stroke = null }
         if (fingers.isEmpty()) return
         externalRestarts += 1
@@ -199,7 +239,7 @@ class GestureComposer(
         emit()
     }
 
-    /** 定期续一小段，及时发现被用户触屏打断的按住。 */
+    /** 定期检查待续接状态；静止时由 emit 跳过，不能派发空续段。 */
     private fun scheduleRenew() {
         handler.removeCallbacks(renew)
         if (fingers.isNotEmpty()) {

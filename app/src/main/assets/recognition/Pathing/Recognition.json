@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "comment": "模板从联想 TB322FC 3040×1904 截图裁出，运行时由 PhoneHud 按文件名加载。这里的 bbox 是裁剪范围，便于对照。",
+  "objects": {
+    "MainPaimon": {
+      "type": "TemplateMatch",
+      "template": "main_paimon.png",
+      "threshold": 0.8,
+      "reference": { "size": [3040, 1904], "bbox": "rect(48, 18, 130, 150)" }
+    },
+    "MapClose": {
+      "type": "TemplateMatch",
+      "template": "map_close.png",
+      "threshold": 0.85,
+      "reference": { "size": [3040, 1904], "bbox": "rect(2850, 59, 76, 74)" }
+    },
+    "MapSettings": {
+      "type": "TemplateMatch",
+      "template": "map_settings.png",
+      "threshold": 0.85,
+      "reference": { "size": [3040, 1904], "bbox": "rect(73, 1754, 66, 64)" }
+    },
+    "MapPanelClose": {
+      "type": "TemplateMatch",
+      "template": "map_panel_close.png",
+      "threshold": 0.85,
+      "reference": { "size": [3040, 1904], "bbox": "rect(2922, 39, 65, 65)" }
+    },
+    "MapZoomKnob": {
+      "type": "TemplateMatch",
+      "template": "map_zoom_knob.png",
+      "threshold": 0.75,
+      "reference": { "size": [3040, 1904], "bbox": "rect(68, 927, 51, 50)" }
+    },
+    "TeleportButton": {
+      "type": "TemplateMatch",
+      "template": "teleport_button.png",
+      "threshold": 0.88,
+      "reference": { "size": [3040, 1904], "bbox": "rect(2113, 1719, 82, 84)" }
+    },
+    "TeleportWaypoint": {
+      "type": "TemplateMatch",
+      "template": "icon_teleport_waypoint.png",
+      "threshold": 0.8,
+      "reference": { "size": [3040, 1904], "bbox": "rect(1789, 839, 63, 90)" }
+    },
+    "Domain": {
+      "type": "TemplateMatch",
+      "template": "icon_domain.png",
+      "threshold": 0.9,
+      "reference": { "size": [3040, 1904], "bbox": "rect(2538, 260, 52, 50)" }
+    }
+  }
+}

@@ -26,6 +26,9 @@ class GameInput(
     private val screenHeight: Int,
     private val client: TouchClient,
 ) {
+    /** 转向期间保持同一视角触点，微调不必反复跨过游戏的拖动起步阈值。 */
+    private var viewTouch: Pair<Int, Int>? = null
+
     fun holdForward(): InputResult = holdDirection(0.0, 1.0)
 
     fun holdBackward(): InputResult = holdDirection(180.0, 1.0)
@@ -68,6 +71,12 @@ class GameInput(
         return if (client.tap(mapped.first, mapped.second, durationMs)) InputResult.Ok else InputResult.Failed
     }
 
+    /** 点击 `layout.json` 参考画布上的点，例如区域名。 */
+    fun tapCalibrated(x: Int, y: Int, durationMs: Long = TAP_MS): InputResult {
+        val mapped = mapPoint(x, y) ?: return InputResult.NotCalibrated("参考画布")
+        return if (client.tap(mapped.first, mapped.second, durationMs)) InputResult.Ok else InputResult.Failed
+    }
+
     /** 点击已经是原生坐标的位置，例如识别到的传送按钮。 */
     fun tapNative(x: Int, y: Int, durationMs: Long = TAP_MS): InputResult {
         return if (client.tap(x, y, durationMs)) InputResult.Ok else InputResult.Failed
@@ -75,12 +84,34 @@ class GameInput(
 
     /**
      * 按视角差角滑动。像素超出视角区时截断，剩余角度由下一帧重新计算。
+     * 使用持续拖动：TB322FC 上重新按下后的小幅独立滑动会被游戏忽略，持续触点可正常微调。
      */
     fun rotateByDiff(diffDegrees: Float): InputResult {
         val gain = layout.cameraGain ?: return InputResult.NotCalibrated("视角灵敏度")
         val pixels = CameraControl.swipePixels(diffDegrees, gain)
         if (pixels == 0) return InputResult.Ok
-        return if (swipeViewPixels(pixels, CameraControl.SWIPE_MS) != 0) InputResult.Ok else InputResult.Failed
+        val area = viewArea() ?: return InputResult.NotCalibrated("视角区")
+        var current = viewTouch
+        if (current == null) {
+            current = area.centerX to area.centerY
+            if (!client.dragBegin(current.first, current.second)) return InputResult.Failed
+            viewTouch = current
+        }
+        val nextX = (current.first + pixels).coerceIn(area.left, area.right - 1)
+        if (nextX == current.first) {
+            // 到边缘后先抬手，下一帧从中心重新按下，避免把回中动作算成反向转动。
+            return releaseView()
+        }
+        if (!client.dragStep(nextX, current.second, CameraControl.SWIPE_MS)) return InputResult.Failed
+        viewTouch = nextX to current.second
+        return InputResult.Ok
+    }
+
+    /** 转向结束后抬起视角触点，防止后续点按与它冲突。 */
+    fun releaseView(): InputResult {
+        if (viewTouch == null) return InputResult.Ok
+        viewTouch = null
+        return if (client.dragEnd()) InputResult.Ok else InputResult.Failed
     }
 
     /**
@@ -103,7 +134,10 @@ class GameInput(
 
     fun dragEnd(): InputResult = if (client.dragEnd()) InputResult.Ok else InputResult.Failed
 
-    fun releaseAll(): InputResult = if (client.releaseAll()) InputResult.Ok else InputResult.Failed
+    fun releaseAll(): InputResult {
+        viewTouch = null
+        return if (client.releaseAll()) InputResult.Ok else InputResult.Failed
+    }
 
     private fun buttonPoint(button: GameButton): Pair<Int, Int>? {
         val point = layout.buttons[button] ?: return null

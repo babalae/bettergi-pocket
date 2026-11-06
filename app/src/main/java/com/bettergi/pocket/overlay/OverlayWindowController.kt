@@ -13,6 +13,7 @@ import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
+import android.util.Log
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -125,19 +126,10 @@ class OverlayWindowController(
     private var pathingMenuExpanded = false
     var onPathingToggle: (() -> Unit)? = null
     var onPathingStart: (() -> Unit)? = null
-    var onPickRouteFile: (() -> Unit)? = null
-    var onPickRouteFolder: (() -> Unit)? = null
-    var onCycleMainAvatar: (() -> Unit)? = null
-    var onCycleGuardianAvatar: (() -> Unit)? = null
-    var onCycleSkillInterval: (() -> Unit)? = null
-    var onToggleLongPress: (() -> Unit)? = null
+    var onPickRoute: (() -> Unit)? = null
     var onCycleGadget: (() -> Unit)? = null
     private var pathingRoute: TextView? = null
     private var pathingStart: TextView? = null
-    private var pathingMain: TextView? = null
-    private var pathingGuardian: TextView? = null
-    private var pathingInterval: TextView? = null
-    private var pathingLongPress: TextView? = null
     private var pathingGadget: TextView? = null
     private var logHandleView: View? = null
     private var logBodyView: View? = null
@@ -148,6 +140,7 @@ class OverlayWindowController(
     private var logBodyParams: WindowManager.LayoutParams? = null
     private val logLines = ArrayDeque<String>(MAX_LOG_LINES)
     private var logWindowVisible = false
+    private var passthroughDepth = 0
     private var talkingUntilMs: Long = 0L
     private val logTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.CHINA)
     private val clearTalkingRunnable = Runnable { refreshStatus() }
@@ -238,10 +231,6 @@ class OverlayWindowController(
         pathingStatus = root.findViewById(R.id.overlay_pathing_status)
         pathingRoute = root.findViewById(R.id.overlay_pathing_route)
         pathingStart = root.findViewById(R.id.overlay_pathing_start)
-        pathingMain = root.findViewById(R.id.overlay_pathing_main)
-        pathingGuardian = root.findViewById(R.id.overlay_pathing_guardian)
-        pathingInterval = root.findViewById(R.id.overlay_pathing_interval)
-        pathingLongPress = root.findViewById(R.id.overlay_pathing_long_press)
         pathingGadget = root.findViewById(R.id.overlay_pathing_gadget)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             root.findViewById<View>(R.id.overlay_group_pathing)?.visibility = View.GONE
@@ -282,12 +271,9 @@ class OverlayWindowController(
         pathingRow?.setOnClickListener { setPathingMenuExpanded(!pathingMenuExpanded) }
         pathingToggle?.setOnClickListener { onPathingToggle?.invoke() }
         pathingStart?.setOnClickListener { onPathingStart?.invoke() }
-        root.findViewById<View>(R.id.overlay_pathing_pick_file)?.setOnClickListener { onPickRouteFile?.invoke() }
-        root.findViewById<View>(R.id.overlay_pathing_pick_folder)?.setOnClickListener { onPickRouteFolder?.invoke() }
-        pathingMain?.setOnClickListener { onCycleMainAvatar?.invoke() }
-        pathingGuardian?.setOnClickListener { onCycleGuardianAvatar?.invoke() }
-        pathingInterval?.setOnClickListener { onCycleSkillInterval?.invoke() }
-        pathingLongPress?.setOnClickListener { onToggleLongPress?.invoke() }
+        val pickRoute = View.OnClickListener { onPickRoute?.invoke() }
+        pathingRoute?.setOnClickListener(pickRoute)
+        root.findViewById<View>(R.id.overlay_pathing_pick)?.setOnClickListener(pickRoute)
         pathingGadget?.setOnClickListener { onCycleGadget?.invoke() }
         root.findViewById<View>(R.id.overlay_launch).setOnClickListener { launchGenshinFromButton() }
         root.findViewById<ImageButton>(R.id.overlay_bilibili).also { button ->
@@ -349,23 +335,24 @@ class OverlayWindowController(
     }
 
     /**
-     * 无障碍手势会先打到可触摸的悬浮窗。只有点击落在这些窗口上时才临时穿透，
+     * 无障碍手势会先打到可触摸的悬浮窗。笔画落到这些窗口上时才临时穿透，
      * 避免每次模拟点击都改 FLAG_NOT_TOUCHABLE 导致窗口闪烁。
+     * 必须在创建悬浮窗的主线程上调用。多次按下要配同样次数的 [restoreClickPassthrough]。
      */
-    fun prepareClickPassthrough(x: Int, y: Int): Boolean {
-        var needed = false
-        if (windowContains(params, rootView, x, y)) {
-            applyTouchPassthrough(params, rootView, passthrough = true)
-            needed = true
-        }
-        if (windowContains(logHandleParams, logHandleView, x, y)) {
-            applyTouchPassthrough(logHandleParams, logHandleView, passthrough = true)
-            needed = true
-        }
-        return needed
+    fun prepareClickPassthrough(x: Int, y: Int): Boolean = prepareAreaPassthrough(x, y, x, y)
+
+    fun prepareAreaPassthrough(x1: Int, y1: Int, x2: Int, y2: Int): Boolean {
+        if (!coversStroke(x1, y1, x2, y2)) return false
+        passthroughDepth++
+        applyTouchPassthrough(params, rootView, passthrough = true)
+        applyTouchPassthrough(logHandleParams, logHandleView, passthrough = true)
+        return true
     }
 
     fun restoreClickPassthrough() {
+        if (passthroughDepth == 0) return
+        passthroughDepth--
+        if (passthroughDepth > 0) return
         applyTouchPassthrough(params, rootView, passthrough = false)
         applyTouchPassthrough(logHandleParams, logHandleView, passthrough = false)
     }
@@ -389,20 +376,32 @@ class OverlayWindowController(
         }
     }
 
-    private fun windowContains(
+    private fun coversStroke(x1: Int, y1: Int, x2: Int, y2: Int): Boolean {
+        val left = minOf(x1, x2)
+        val top = minOf(y1, y2)
+        val right = maxOf(x1, x2)
+        val bottom = maxOf(y1, y2)
+        return windowIntersects(params, rootView, left, top, right, bottom) ||
+            windowIntersects(logHandleParams, logHandleView, left, top, right, bottom)
+    }
+
+    private fun windowIntersects(
         lp: WindowManager.LayoutParams?,
         view: View?,
-        x: Int,
-        y: Int,
+        left: Int,
+        top: Int,
+        right: Int,
+        bottom: Int,
     ): Boolean {
         if (lp == null || view == null) return false
         val width = if (view.width > 0) view.width else return false
         val height = if (view.height > 0) view.height else return false
         val slop = dp(8)
-        return x >= lp.x - slop &&
-            x < lp.x + width + slop &&
-            y >= lp.y - slop &&
-            y < lp.y + height + slop
+        val windowLeft = lp.x - slop
+        val windowTop = lp.y - slop
+        val windowRight = lp.x + width + slop
+        val windowBottom = lp.y + height + slop
+        return left <= windowRight && right >= windowLeft && top <= windowBottom && bottom >= windowTop
     }
 
     fun hide() {
@@ -457,10 +456,6 @@ class OverlayWindowController(
         pathingStatus = null
         pathingRoute = null
         pathingStart = null
-        pathingMain = null
-        pathingGuardian = null
-        pathingInterval = null
-        pathingLongPress = null
         pathingGadget = null
     }
 
@@ -650,6 +645,7 @@ class OverlayWindowController(
     }
 
     fun log(message: String) {
+        Log.i(TAG, message)
         appendLog(message)
     }
 
@@ -668,17 +664,16 @@ class OverlayWindowController(
     fun setRouteRunning(running: Boolean) {
         mainHandler.post {
             pathingStart?.text = if (running) "停止路线" else "开始路线"
-            if (running) setPathingMenuExpanded(true)
+            if (running) {
+                setPathingMenuExpanded(true)
+                if (!logWindowVisible) setLogWindowVisible(true)
+            }
         }
     }
 
     fun showPathing(routeLabel: String, settings: PathingSettings) {
         mainHandler.post {
             pathingRoute?.text = routeLabel
-            pathingMain?.text = "行走位 ${settings.mainAvatarIndex ?: "无"}"
-            pathingGuardian?.text = "生存位 ${settings.guardianAvatarIndex ?: "无"}"
-            pathingInterval?.text = "E 间隔 ${settings.guardianSkillIntervalSeconds?.let { "${it.toInt()} 秒" } ?: "关"}"
-            pathingLongPress?.text = "长按 E ${if (settings.guardianSkillLongPress) "开" else "关"}"
             pathingGadget?.text = "自动 Z ${if (settings.useGadgetIntervalMs == 0) "关" else "${settings.useGadgetIntervalMs} ms"}"
         }
     }
@@ -691,15 +686,20 @@ class OverlayWindowController(
 
     private fun appendLog(message: String) {
         mainHandler.post {
-            if (!logWindowVisible || logText == null) return@post
             val line = "${logTimeFormat.format(Date())} $message"
             if (logLines.size >= MAX_LOG_LINES) {
                 logLines.removeFirst()
             }
             logLines.addLast(line)
-            logText?.text = logLines.joinToString("\n")
-            logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
+            renderLog()
         }
+    }
+
+    private fun renderLog() {
+        val text = logText ?: return
+        if (!logWindowVisible) return
+        text.text = if (logLines.isEmpty()) "等待识别…" else logLines.joinToString("\n")
+        logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
     }
 
     private fun setLogWindowVisible(visible: Boolean, persist: Boolean = true) {
@@ -826,6 +826,7 @@ class OverlayWindowController(
         logTitle = handle.findViewById(R.id.overlay_log_title)
         logText = body.findViewById(R.id.overlay_log_text)
         logScroll = body.findViewById(R.id.overlay_log_scroll)
+        renderLog()
 
         val width = dp(LOG_WIDTH_DP)
         val (defaultX, defaultY) = defaultLogPosition()
@@ -882,7 +883,6 @@ class OverlayWindowController(
         logTitle = null
         logText = null
         logScroll = null
-        logLines.clear()
     }
 
     private fun overlayParams(
@@ -1226,6 +1226,7 @@ class OverlayWindowController(
     }
 
     private companion object {
+        private const val TAG = "BetterGI.Pathing"
         private const val PREFS_NAME = "overlay_window"
         private const val KEY_X = "x"
         private const val KEY_Y = "y"
@@ -1236,10 +1237,10 @@ class OverlayWindowController(
         private const val KEY_LAUNCH_EXPANDED = "launch_expanded"
         private const val KEY_PATHING_EXPANDED = "pathing_expanded"
         private const val LOG_WIDTH_DP = 260
-        private const val LOG_DEFAULT_HEIGHT_DP = 148
+        private const val LOG_DEFAULT_HEIGHT_DP = 204
         private const val IDLE_ALPHA = 0.62f
         private const val IDLE_DELAY_MS = 2400L
         private const val TALKING_HOLD_MS = 2000L
-        private const val MAX_LOG_LINES = 16
+        private const val MAX_LOG_LINES = 80
     }
 }

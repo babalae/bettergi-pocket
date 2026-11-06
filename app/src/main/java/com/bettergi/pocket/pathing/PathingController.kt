@@ -62,6 +62,19 @@ class PathingController(
         }
     }
 
+    /** 调试用：只启动坐标显示，已在运行时不重复启动。 */
+    fun startReadout() {
+        synchronized(lock) {
+            if (job == Job.Route) {
+                log("路线还在执行，请先停止路线")
+                return
+            }
+            if (worker?.isAlive != true) {
+                startReadoutLocked()
+            }
+        }
+    }
+
     fun startRoute() {
         synchronized(lock) {
             if (job == Job.Readout) {
@@ -102,7 +115,7 @@ class PathingController(
             return
         }
         if (genshinInForeground() == null) {
-            log("无障碍未连接，不检查原神是否在前台")
+            log("无法确认前台应用，跳过前台检查")
         }
         val runtime = PathingRuntime(frames)
         this.runtime = runtime
@@ -205,6 +218,7 @@ class PathingController(
         onRouteChanged(true)
         onStatus(routes.first().first)
         val thread = Thread({
+            var outcome: String? = null
             try {
                 val input = GameInput(layout, size.first, size.second, touch)
                 val locator = MiniMapLocator(layout.miniMap!!)
@@ -222,10 +236,12 @@ class PathingController(
                     screenHeight = size.second,
                     points = points,
                     bigMap = bigMap,
+                    regionButton = layout.regionButton,
                     log = log,
                 )
                 val settings = pathingSettings()
                 var completed = 0
+                var failure: String? = null
                 for ((name, json) in routes) {
                     if (runtime.cancelled) break
                     onStatus(name)
@@ -233,7 +249,9 @@ class PathingController(
                     val route = try {
                         PathingRoutes.parse(json)
                     } catch (e: Exception) {
-                        log("$name 无法解析：${e.message ?: e.javaClass.simpleName}")
+                        val reason = "$name 无法解析：${e.message ?: e.javaClass.simpleName}"
+                        failure = reason
+                        log(reason)
                         continue
                     }
                     // 每条路线一个执行器，卡死次数和跳过状态不跨路线（BGI 每条路线 new PathExecutor）
@@ -252,17 +270,29 @@ class PathingController(
                         log("$name 完成")
                     } else {
                         // 与 BGI 调度一致：一条失败不影响后面的路线，停止时才退出
-                        log("$name 未完成：${result.errorMessage ?: "未知原因"}")
+                        val reason = result.errorMessage ?: "未知原因"
+                        failure = reason
+                        log("$name 未完成：$reason")
                     }
                 }
                 if (routes.size > 1) log("路线执行结束：完成 $completed / ${routes.size}")
+                outcome = failure
             } catch (e: CancellationException) {
-                // 停止
+                // 用户停止或外部条件打断
+            } catch (_: InterruptedException) {
+                // 停止也可能发生在跨进程触控等待中，不应作为路线故障显示。
+                Thread.currentThread().interrupt()
             } catch (e: Exception) {
-                log("路线中断：${e.message ?: e.javaClass.simpleName}")
-                onStatus("路线中断")
+                val reason = "路线中断：${e.message ?: e.javaClass.simpleName}"
+                log(reason)
+                outcome = reason
             } finally {
-                runtime.stopReason?.let { log("地图追踪已停止：$it") }
+                // 释放触点需要等待主线程；先清中断位，确保停止后的清理能真正完成。
+                val interrupted = Thread.interrupted()
+                runtime.stopReason?.let {
+                    log("地图追踪已停止：$it")
+                    outcome = it
+                }
                 touch.releaseAll()
                 Navigation.release()
                 TaskGate.exclusiveRunning = false
@@ -271,7 +301,8 @@ class PathingController(
                     if (this.runtime === runtime) this.runtime = null
                 }
                 onRouteChanged(false)
-                onStatus("已停止")
+                onStatus(outcome ?: "已停止")
+                if (interrupted) Thread.currentThread().interrupt()
             }
         }, WORKER_NAME)
         worker = thread
@@ -306,13 +337,8 @@ class PathingController(
             GameButton.Jump to "跳跃",
             GameButton.Drop to "下落",
             GameButton.Sprint to "冲刺",
-            GameButton.Skill to "元素战技",
             GameButton.Gadget to "小道具",
             GameButton.Attack to "攻击",
-            GameButton.Party1 to "1 号位",
-            GameButton.Party2 to "2 号位",
-            GameButton.Party3 to "3 号位",
-            GameButton.Party4 to "4 号位",
         )
         required.forEach { (button, label) ->
             if (layout.buttons[button] == null) missing += label

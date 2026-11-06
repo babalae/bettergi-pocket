@@ -31,21 +31,6 @@ interface PathingVision {
 
     /** 小道具 CD 秒数。无法识别时返回 null，按没有 CD 处理。 */
     fun gadgetCooldownSeconds(frame: Mat): Double?
-
-    /**
-     * 四个队伍槽位的特征。无法识别时返回 null。
-     * 三个相同、一个不同时，不同的那个是出战位（从 1 开始）。
-     */
-    fun partySlotSignatures(frame: Mat): List<Int>?
-}
-
-fun activePartySlot(signatures: List<Int>?): Int? {
-    if (signatures == null || signatures.size != 4) return null
-    val counts = signatures.groupingBy { it }.eachCount()
-    if (counts.size != 2) return null
-    val unique = counts.entries.firstOrNull { it.value == 1 } ?: return null
-    if (counts.values.none { it == 3 }) return null
-    return signatures.indexOf(unique.key) + 1
 }
 
 object UnavailablePathingVision : PathingVision {
@@ -57,5 +42,4 @@ object UnavailablePathingVision : PathingVision {
     override fun lastDialogueOption(frame: Mat) = null
     override fun zhongliSkillVisible(frame: Mat) = false
     override fun gadgetCooldownSeconds(frame: Mat) = null
-    override fun partySlotSignatures(frame: Mat) = null
 }
