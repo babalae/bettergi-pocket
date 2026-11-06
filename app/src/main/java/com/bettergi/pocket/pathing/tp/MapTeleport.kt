@@ -2,7 +2,6 @@ package com.bettergi.pocket.pathing.tp
 
 import com.bettergi.pocket.pathing.ControlPoint
 import com.bettergi.pocket.pathing.common.Point2f
-import com.bettergi.pocket.recognition.ocr.OcrFactory
 import com.bettergi.pocket.pathing.executor.PathingRuntime
 import com.bettergi.pocket.pathing.input.GameInput
 import com.bettergi.pocket.pathing.map.MapManager
@@ -126,24 +125,39 @@ class MapTeleport(
     private fun switchCountry(country: String) {
         if (country.isBlank()) return
         val hub = TpCatalog.countryCenters[country] ?: return
-        val center = positionFromBigMap("Teyvat")
-        if (center != null &&
-            !TpCatalog.shouldSwitchCountry(center.x.toDouble(), center.y.toDouble(), hub.first, hub.second)
-        ) {
-            return
+        val panelFrame = runtime.nextFrame(400)
+        val panelOpen = try {
+            panelFrame != null && bigMap.isRegionPanelOpen(panelFrame.bgr)
+        } finally {
+            panelFrame?.bgr?.release()
         }
-        val button = regionButton ?: throw HandledException("区域按钮未标定，无法切到 $country")
+        if (!panelOpen) {
+            val center = positionFromBigMap("Teyvat")
+            if (center != null &&
+                !TpCatalog.shouldSwitchCountry(center.x.toDouble(), center.y.toDouble(), hub.first, hub.second)
+            ) {
+                return
+            }
+        }
         log("切换地区：$country")
-        if (!input.tapCalibrated(button.x, button.y).succeeded) {
-            throw HandledException("点不开区域名单")
+        // 重试或手动打开名单时直接复用，不能再次点击底下的地图区域按钮。
+        if (!panelOpen) {
+            val button = regionButton ?: throw HandledException("区域按钮未标定，无法切到 $country")
+            if (!input.tapCalibrated(button.x, button.y).succeeded) {
+                throw HandledException("点不开区域名单")
+            }
+            runtime.delay(500)
         }
-        runtime.delay(500)
+        var recognizedNames = emptyList<String>()
         repeat(8) {
             val frame = runtime.nextFrame(400) ?: return@repeat
             try {
-                val hit = findCountryLabel(frame.bgr, country)
+                val hit = CountryRegionSelector.find(frame.bgr, country, onRecognized = { recognizedNames = it })
                 if (hit != null) {
-                    input.tapNative(hit.first, hit.second)
+                    if (!input.tapNative(hit.first, hit.second).succeeded) {
+                        throw HandledException("点击地区 $country 失败")
+                    }
+                    log("已选择地区：$country")
                     runtime.delay(800)
                     return
                 }
@@ -152,31 +166,8 @@ class MapTeleport(
             }
             runtime.delay(200)
         }
+        log("地区名单识别结果：${recognizedNames.joinToString(" / ")}")
         throw HandledException("区域名单里没有找到 $country")
-    }
-
-    private fun findCountryLabel(bgr: Mat, country: String): Pair<Int, Int>? {
-        val x0 = (bgr.cols() * 0.62).toInt().coerceIn(0, bgr.cols() - 1)
-        val roi = bgr.submat(0, bgr.rows(), x0, bgr.cols())
-        val result = try {
-            OcrFactory.default.recognize(roi)
-        } finally {
-            roi.release()
-        }
-        var bestX = 0
-        var bestY = 0
-        var bestScore = 0
-        for (region in result.regions) {
-            val text = TpCatalog.normalizeAreaName(region.text)
-            val score = TpCatalog.nameOverlap(text, country)
-            if (score > bestScore) {
-                bestScore = score
-                bestX = x0 + region.rect.centerX
-                bestY = region.rect.centerY
-            }
-        }
-        if (bestScore < country.length) return null
-        return bestX to bestY
     }
 
     override fun positionFromBigMap(mapName: String): Point2f? = positionFromBigMap(mapName, null)
@@ -400,6 +391,8 @@ class MapTeleport(
 
 interface BigMapUi {
     fun isOpen(frame: Mat): Boolean
+    /** 地图内的地区选择名单，仍属于大地图，但需要先选择地区才能拖图。 */
+    fun isRegionPanelOpen(frame: Mat): Boolean = false
     fun closeButton(frame: Mat): Pair<Int, Int>?
     fun observedIcons(frame: Mat): List<MapIcon> = emptyList()
 

@@ -37,6 +37,7 @@ class PhoneHud(
     private val domain: Mat,
     private val layout: PathingLayout,
     private val dialogue: DialogueReader? = null,
+    private val regionTitle: Mat? = null,
 ) : PathingVision, BigMapUi {
     private var cachedScale = 1.0
     private val scaled = IdentityHashMap<Mat, Mat>()
@@ -63,6 +64,8 @@ class PhoneHud(
     override fun gadgetCooldownSeconds(frame: Mat): Double? = null
 
     override fun isOpen(frame: Mat): Boolean = isInBigMap(frame)
+
+    override fun isRegionPanelOpen(frame: Mat): Boolean = regionPanelClose(frame) != null
 
     override fun observedIcons(frame: Mat): List<MapIcon> = withGray(frame) { gray ->
         val icons = ArrayList<MapIcon>()
@@ -91,6 +94,14 @@ class PhoneHud(
     private fun mapChrome(frame: Mat): TemplateHit? {
         return hit(frame, mapSettings, SETTINGS_ROI, Threshold.MAP_CHROME)
             ?: hit(frame, mapClose, CLOSE_ROI, Threshold.MAP_CHROME)
+            ?: regionPanelClose(frame)
+    }
+
+    private fun regionPanelClose(frame: Mat): TemplateHit? {
+        // 地区名单会隐藏普通地图按钮；同时核对“地图”标题，避免把其他页面的叉号当成大地图。
+        val title = regionTitle ?: return null
+        if (hit(frame, title, REGION_TITLE_ROI, Threshold.MAP_CHROME) == null) return null
+        return hit(frame, panelClose, CLOSE_ROI, Threshold.MAP_CHROME)
     }
 
     private fun hit(frame: Mat, template: Mat, roi: IntRect?, threshold: Double): TemplateHit? {
@@ -155,6 +166,7 @@ class PhoneHud(
         private val CLOSE_ROI = IntRect(2500, 0, 540, 280)
         private val SETTINGS_ROI = IntRect(0, 1550, 320, 354)
         private val KNOB_ROI = IntRect(30, 680, 160, 560)
+        private val REGION_TITLE_ROI = IntRect(1760, 0, 260, 160)
 
         val WAYPOINT_TYPES: Set<String> = setOf("TeleportWaypoint")
         val DOMAIN_TYPES: Set<String> = setOf(
@@ -182,6 +194,7 @@ class PhoneHud(
                 domain = gray("icon_domain.png"),
                 layout = layout,
                 dialogue = dialogue?.let(::DialogueReader),
+                regionTitle = gray("map_region_title.png"),
             )
         }
 

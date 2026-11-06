@@ -70,6 +70,8 @@ object TpCatalog {
 
     fun normalizeAreaName(name: String): String {
         return name.replace("渊下宮", "渊下宫").replace("蒙徳", "蒙德").replace("娜塔", "纳塔")
+            // TB322FC 地区名单高亮时，ML Kit 会把“莱”识别成“菜”。只修正完整地名。
+            .replace("挪德卡菜", "挪德卡莱")
     }
 
     fun nameOverlap(candidate: String, target: String): Int {

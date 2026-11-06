@@ -1,13 +1,19 @@
 package com.bettergi.pocket.pathing.vision
 
+import com.bettergi.pocket.pathing.PathingLayout
 import com.bettergi.pocket.pathing.PathingTestData
 import com.bettergi.pocket.recognition.IntRect
+import com.bettergi.pocket.recognition.IntSize
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.BeforeClass
 import org.junit.Test
+import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.MatOfByte
+import org.opencv.core.Rect
+import org.opencv.core.Scalar
 import org.opencv.imgcodecs.Imgcodecs
 import java.io.File
 
@@ -16,6 +22,33 @@ import java.io.File
  * 不依赖 artifacts 中的整屏截图，缺失或损坏的样本应让测试失败。
  */
 class PhoneMapTemplateTest {
+    @Test
+    fun `region list is part of the map but an unrelated close button is not`() {
+        val names = listOf("main_paimon.png", "map_close.png", "map_settings.png", "map_panel_close.png",
+            "map_zoom_knob.png", "teleport_button.png", "icon_teleport_waypoint.png", "icon_domain.png", "map_region_title.png")
+        val templates = names.map(::template)
+        val frame = Mat(1904, 3040, CvType.CV_8UC1, Scalar(0.0))
+        val close = sample("region-panel-close")
+        val hud = PhoneHud(3040, 1904, templates[0], templates[1], templates[2], templates[3],
+            templates[4], templates[5], templates[6], templates[7], PathingLayout(IntSize(3040, 1904), null),
+            regionTitle = templates[8])
+        try {
+            val closeTarget = frame.submat(Rect(2500, 0, close.cols(), close.rows()))
+            try { close.copyTo(closeTarget) } finally { closeTarget.release() }
+            assertTrue(hud.closeButton(frame) != null)
+            assertFalse(hud.isRegionPanelOpen(frame))
+            assertFalse(hud.isInBigMap(frame))
+            val titleTarget = frame.submat(Rect(1830, 35, templates[8].cols(), templates[8].rows()))
+            try { templates[8].copyTo(titleTarget) } finally { titleTarget.release() }
+            assertTrue(hud.isRegionPanelOpen(frame))
+            assertTrue(hud.isInBigMap(frame))
+            assertTrue(hud.isOpen(frame))
+            assertFalse(hud.isWorldUi(frame))
+        } finally {
+            frame.release(); close.release(); templates.forEach { it.release() }
+        }
+    }
+
     @Test
     fun `paimon marks the main ui and not the map`() {
         val main = sample("main-paimon")
