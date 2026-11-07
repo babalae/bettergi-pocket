@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="360" viewBox="0 0 800 360">
+  <defs>
+    <style>
+      text{font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif}
+      .h{font-size:15px;font-weight:700;fill:#F7F0E4}
+      .b{font-size:13px;fill:#F7F0E4}
+      .l{font-size:12px;font-weight:600;fill:#F7F0E4}
+      .c{font-size:11px;fill:rgba(247,240,228,.7)}
+      .m{font-family:Consolas,"Cascadia Mono",monospace;font-size:11px;fill:rgba(247,240,228,.55)}
+      .mt{font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif;fill:#F7F0E4}
+      .gold{fill:#C9A36A}.mu{fill:rgba(247,240,228,.7)}.warn{fill:#E8A45A}.note{font-size:10px;fill:rgba(20,30,60,.6)}
+    </style>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3f63b0"/><stop offset=".6" stop-color="#7aa3dd"/>
+      <stop offset=".6" stop-color="#cddcf1"/><stop offset="1" stop-color="#a9c3e6"/>
+    </linearGradient>
+    <symbol id="close" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
+    <symbol id="less" viewBox="0 0 24 24"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></symbol>
+    <symbol id="article" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></symbol>
+    <symbol id="share" viewBox="0 0 24 24"><path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.11-.9-2-2-2H4c-1.11 0-2 .89-2 2v10c0 1.1.89 2 2 2H0v2h24v-2h-4zm-7-3.53v-2.19c-2.78 0-4.61.85-6 2.72.56-2.67 2.11-5.33 6-5.87V7l4 3.73-4 3.74z"/></symbol>
+    <symbol id="chat" viewBox="0 0 24 24"><path d="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z"/></symbol>
+    <symbol id="map" viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></symbol>
+    <symbol id="open" viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></symbol>
+    <symbol id="ffwd" viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></symbol>
+    <symbol id="renew" viewBox="0 0 24 24"><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/></symbol>
+    <symbol id="power" viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></symbol>
+  </defs>
+
+  <!-- 游戏画面占位：小地图、顶部图标、队伍、摇杆、技能 -->
+  <rect width="800" height="360" fill="url(#sky)"/>
+  <g fill="rgba(255,255,255,.22)" stroke="rgba(255,255,255,.6)" stroke-width="1.5">
+    <circle cx="62" cy="58" r="44"/>
+    <circle cx="132" cy="24" r="12"/><circle cx="166" cy="24" r="12"/><circle cx="200" cy="24" r="12"/>
+    <circle cx="560" cy="22" r="13"/><circle cx="596" cy="22" r="13"/><circle cx="632" cy="22" r="13"/>
+    <circle cx="668" cy="22" r="13"/><circle cx="704" cy="22" r="13"/><circle cx="740" cy="22" r="13"/><circle cx="776" cy="22" r="13"/>
+    <rect x="690" y="96" width="96" height="28" rx="14"/><rect x="690" y="134" width="96" height="28" rx="14"/><rect x="690" y="172" width="96" height="28" rx="14"/>
+    <circle cx="110" cy="290" r="44"/>
+    <circle cx="722" cy="292" r="34"/><circle cx="648" cy="320" r="22"/><circle cx="690" cy="226" r="20"/><circle cx="596" cy="332" r="16"/>
+  </g>
+  <rect x="300" y="344" width="200" height="5" rx="2.5" fill="#6fd17a"/>
+  <text x="792" y="355" class="note" text-anchor="end">基准可用区 800×360dp · 执行路线中，展开主面板</text>
+
+  <!-- 状态条：标题行可触摸，正文不可触摸 -->
+  <rect x="290" y="44" width="320" height="118" rx="8" fill="rgba(28,22,18,.92)" stroke="rgba(201,163,106,.35)"/>
+  <rect x="290" y="72" width="320" height="1" fill="rgba(255,255,255,.08)"/>
+  <circle cx="302" cy="58" r="4" fill="#C9A36A"/>
+  <text x="312" y="62" class="l gold">3/9</text>
+  <text x="338" y="62" class="mt" style="font-size:12px">01-海灵芝-绀田村左上…</text>
+  <text x="526" y="62" class="c" text-anchor="end">02:15</text>
+  <rect x="533" y="47" width="22" height="22" rx="6" fill="rgba(229,115,95,.18)"/>
+  <rect x="539" y="53" width="10" height="10" rx="1.5" fill="#E5735F"/>
+  <use href="#less" x="561" y="49" width="18" height="18" fill="rgba(247,240,228,.7)"/>
+  <use href="#close" x="586" y="49" width="18" height="18" fill="rgba(247,240,228,.7)"/>
+  <text x="300" y="89" class="m">02:14:51<tspan class="mt" dx="8">开始路线 01-海灵芝-绀田村左上角-5个</tspan></text>
+  <text x="300" y="105" class="m">02:14:51<tspan class="mt" dx="8">小地图匹配：SIFT</tspan></text>
+  <text x="300" y="121" class="m">02:14:53<tspan class="mt" dx="8">传送至传送锚点 (7156.7, 9313.96)</tspan></text>
+  <text x="300" y="137" class="m">02:14:58<tspan class="mt warn" dx="8">未识别到小地图，重试 1/3</tspan></text>
+  <text x="300" y="153" class="m">02:15:02<tspan class="mt" dx="8">已到达路径点 3/12</tspan></text>
+
+  <!-- 主面板 -->
+  <rect x="8" y="64" width="256" height="288" rx="14" fill="rgba(28,22,18,.96)" stroke="rgba(201,163,106,.4)"/>
+  <circle cx="28" cy="84" r="12" fill="#F4E6C8"/><circle cx="28" cy="84" r="7" fill="#C9A36A"/>
+  <text x="48" y="89" class="h">更好的原神</text>
+  <rect x="128" y="75" width="62" height="18" rx="9" fill="rgba(201,163,106,.2)"/>
+  <circle cx="137" cy="84" r="3" fill="#C9A36A"/>
+  <text x="144" y="88" class="c gold" style="font-weight:600">路线 3/9</text>
+  <use href="#article" x="202" y="74" width="20" height="20" fill="#C9A36A"/>
+  <use href="#close" x="234" y="74" width="20" height="20" fill="rgba(247,240,228,.7)"/>
+
+  <!-- 实时任务分组 -->
+  <rect x="16" y="108" width="240" height="88" rx="10" fill="rgba(255,255,255,.07)"/>
+  <use href="#share" x="28" y="120" width="20" height="20" fill="rgba(247,240,228,.7)"/>
+  <text x="60" y="135" class="b">共享屏幕</text>
+  <rect x="208" y="120" width="36" height="20" rx="10" fill="#C9A36A"/><circle cx="234" cy="130" r="7.5" fill="#1C1612"/>
+  <rect x="60" y="152" width="196" height="1" fill="rgba(255,255,255,.08)"/>
+  <use href="#chat" x="28" y="164" width="20" height="20" fill="rgba(247,240,228,.7)"/>
+  <text x="60" y="179" class="b">自动对话</text>
+  <rect x="118.5" y="162.5" width="80" height="23" rx="6" fill="rgba(201,163,106,.18)" stroke="rgba(201,163,106,.55)"/>
+  <use href="#ffwd" x="124" y="167" width="14" height="14" fill="#C9A36A"/>
+  <text x="142" y="178" class="l gold">快速跳过</text>
+  <rect x="208" y="164" width="36" height="20" rx="10" fill="#C9A36A"/><circle cx="234" cy="174" r="7.5" fill="#1C1612"/>
+
+  <!-- 地图追踪分组：执行中 -->
+  <rect x="16" y="204" width="240" height="56" rx="10" fill="rgba(255,255,255,.07)"/>
+  <use href="#map" x="28" y="214" width="20" height="20" fill="rgba(247,240,228,.7)"/>
+  <text x="60" y="227" class="b">地图追踪</text>
+  <text x="60" y="244" class="c">3/9 · 01-海灵芝-绀田村左上…</text>
+  <rect x="60" y="251" width="140" height="3" rx="1.5" fill="rgba(255,255,255,.12)"/>
+  <rect x="60" y="251" width="47" height="3" rx="1.5" fill="#C9A36A"/>
+  <circle cx="228" cy="232" r="15.5" fill="rgba(229,115,95,.16)" stroke="rgba(229,115,95,.6)"/>
+  <rect x="223" y="227" width="10" height="10" rx="1.5" fill="#E5735F"/>
+
+  <!-- 启动分组 -->
+  <rect x="16" y="268" width="240" height="44" rx="10" fill="rgba(255,255,255,.07)"/>
+  <use href="#open" x="28" y="280" width="20" height="20" fill="rgba(247,240,228,.7)"/>
+  <text x="60" y="295" class="b">启动原神</text>
+  <rect x="118.5" y="278.5" width="52" height="23" rx="6" fill="none" stroke="rgba(247,240,228,.25)"/>
+  <use href="#renew" x="124" y="283" width="14" height="14" fill="rgba(247,240,228,.7)"/>
+  <text x="142" y="294" class="l mu">自动</text>
+  <rect x="196.5" y="278.5" width="47" height="23" rx="8" fill="rgba(201,163,106,.15)" stroke="rgba(201,163,106,.6)"/>
+  <text x="220" y="294" class="l gold" text-anchor="middle">启动</text>
+
+  <!-- 页脚 -->
+  <g transform="translate(26,322)" fill="none" stroke="#FB7299" stroke-width="1.8" stroke-linecap="round">
+    <rect x="0" y="4" width="18" height="13" rx="3"/><path d="M5 1l3 3M13 1l-3 3"/>
+  </g>
+  <circle cx="32" cy="332.5" r="1.2" fill="#FB7299"/><circle cx="38" cy="332.5" r="1.2" fill="#FB7299"/>
+  <text x="52" y="336" class="c">v1.0</text>
+  <use href="#power" x="204" y="325" width="14" height="14" fill="rgba(247,240,228,.7)"/>
+  <text x="222" y="336" class="l mu">退出</text>
+</svg>

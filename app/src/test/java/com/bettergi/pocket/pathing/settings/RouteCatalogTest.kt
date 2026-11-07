@@ -92,4 +92,27 @@ class RouteCatalogTest {
         val routes = RouteCatalog.parse("../坏.json\n/root.json\n./bad.json\n正常/好.json")
         assertEquals(listOf("正常"), routes.roots.map { it.name })
     }
+
+    @Test
+    fun `queue compresses full groups and keeps the execution order`() {
+        val routes = RouteCatalog.parse("采集/a@作者/1.json\n采集/a@作者/2.json\n采集/b/3.json\n采集/b/4.json")
+        val selected = setOf("采集/b/4.json", "采集/a@作者/2.json", "采集/a@作者/1.json")
+        val queue = routes.queueEntries(selected)
+        assertEquals(listOf("采集/a@作者", "采集/b/4.json"), queue.map { it.relativePath })
+        assertEquals(routes.resolve(selected).map { it.relativePath }, queue.flatMap { it.routePaths })
+        assertEquals("a", queue.first().displayName)
+        assertEquals("作者", queue.first().author)
+        assertEquals("已选 3 条 · a 等 2 组", routes.selectionSummary(selected))
+        assertEquals(listOf("采集"), routes.queueEntries(setOf("采集")).map { it.relativePath })
+        assertTrue(routes.queueEntries(emptySet()).isEmpty())
+    }
+
+    @Test
+    fun `removing a compressed group preserves unrelated files`() {
+        val routes = RouteCatalog.parse("组/a/1.json\n组/a/2.json\n组/b/3.json")
+        val selected = routes.resolve(setOf("组")).map { it.relativePath }.toMutableSet()
+        val group = routes.node("组/a")!!
+        selected.removeAll(group.routePaths.toSet())
+        assertEquals(listOf("组/b/3.json"), routes.resolve(selected).map { it.relativePath })
+    }
 }

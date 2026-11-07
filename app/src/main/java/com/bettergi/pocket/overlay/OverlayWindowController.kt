@@ -19,7 +19,6 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.DisplayMetrics
-import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -31,8 +30,15 @@ import android.view.animation.PathInterpolator
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.ScrollView
+import android.widget.ProgressBar
+import androidx.appcompat.widget.TooltipCompat
+import com.bettergi.pocket.ui.OverlayUi
+import com.bettergi.pocket.ui.OverlayGeometry
+import com.bettergi.pocket.pathing.PathingProgress
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
@@ -44,7 +50,6 @@ import com.bettergi.pocket.feature.autopick.AutoPickFeature
 import com.bettergi.pocket.feature.autoskip.AutoSkipEvents
 import com.bettergi.pocket.genshin.GenshinLaunchResult
 import com.bettergi.pocket.genshin.GenshinLauncher
-import com.bettergi.pocket.genshin.GenshinPackages
 import com.bettergi.pocket.input.AccessibilityServiceHealth
 import com.bettergi.pocket.input.InputAccessibilityService
 import com.bettergi.pocket.settings.TriggerSettings
@@ -59,7 +64,7 @@ class OverlayWindowController(
     private val genshinLauncher: GenshinLauncher = GenshinLauncher(context),
     private val onExit: () -> Unit = {},
 ) : AutoSkipEvents {
-    private val themedContext = ContextThemeWrapper(context, R.style.Theme_BetterGIPocket)
+    private var themedContext = OverlayUi.context(context)
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -68,6 +73,8 @@ class OverlayWindowController(
     private var lastScreenW = 0
     private var lastScreenH = 0
     private var watchingScreen = false
+    private var overlayDensity = 0
+    private var overlayFontScale = 1f
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) = Unit
@@ -79,6 +86,14 @@ class OverlayWindowController(
 
     private val configCallbacks = object : ComponentCallbacks {
         override fun onConfigurationChanged(newConfig: Configuration) {
+            val fontScale = newConfig.fontScale.coerceAtMost(1.3f)
+            if (rootView != null && (overlayDensity != newConfig.densityDpi || overlayFontScale != fontScale)) {
+                val wasExpanded = expanded
+                params?.let { persistPosition(it) }
+                hide(); show()
+                if (wasExpanded) setExpanded(true)
+                return
+            }
             relocateOverlays(force = true)
         }
 
@@ -100,26 +115,31 @@ class OverlayWindowController(
     private var pendingCollapseOnOutside = false
     private var switchEnabled: SwitchCompat? = null
     private var switchAutoSkip: SwitchCompat? = null
-    private var switchQuickSkip: SwitchCompat? = null
+    private var quickSkipChip: TextView? = null
     private var switchAutoPick: SwitchCompat? = null
-    private var switchAutoLaunch: SwitchCompat? = null
-    private var launchHint: TextView? = null
+    private var autoLaunchChip: TextView? = null
     private var launchSubtitle: TextView? = null
     private var logToggleButton: ImageButton? = null
     private var rowAutoSkip: View? = null
-    private var rowQuickSkip: View? = null
     private var rowAutoPick: View? = null
     private var rowLaunch: View? = null
-    private var autoSkipExtras: View? = null
-    private var autoSkipChevron: ImageView? = null
-    private var autoSkipMenuExpanded = false
-    private var launchExtras: View? = null
-    private var launchChevron: ImageView? = null
-    private var launchMenuExpanded = false
     private var pathingRow: View? = null
     private var pathingStatus: TextView? = null
-    var onPathingStart: (() -> Unit)? = null
-    private var pathingStart: TextView? = null
+    var onPathingStart: (() -> Boolean)? = null
+    var onPathingOpen: (() -> Unit)? = null
+    var onPathingStop: (() -> Unit)? = null
+    private var pathingStart: ImageButton? = null
+    private var routeRunning = false
+    private var readoutRunning = false
+    private var progress: PathingProgress? = null
+    private var pathingSummary = "未选择路线"
+    private var hasRouteSelection = false
+    private var latestPathingStatus = ""
+    private var logExpanded = true
+    private var captureInterrupted = false
+    enum class LogLevel { Info, Warning, Error }
+    private data class LogLine(val time: String, val message: String, val level: LogLevel)
+
     private var logHandleView: View? = null
     private var logBodyView: View? = null
     private var logTitle: TextView? = null
@@ -127,12 +147,18 @@ class OverlayWindowController(
     private var logScroll: ScrollView? = null
     private var logHandleParams: WindowManager.LayoutParams? = null
     private var logBodyParams: WindowManager.LayoutParams? = null
-    private val logLines = ArrayDeque<String>(MAX_LOG_LINES)
+    private val logLines = ArrayDeque<LogLine>(MAX_LOG_LINES)
     private var logWindowVisible = false
     private var passthroughDepth = 0
     private var talkingUntilMs: Long = 0L
     private val logTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.CHINA)
     private val clearTalkingRunnable = Runnable { refreshStatus() }
+    private val statusTick = object : Runnable {
+        override fun run() {
+            if (!routeRunning && !readoutRunning) return
+            refreshLogTitle(); mainHandler.postDelayed(this, 1000)
+        }
+    }
 
     private val idleFadeRunnable = Runnable { fadeBubble(IDLE_ALPHA) }
     private var a11yWarningReady = false
@@ -153,9 +179,9 @@ class OverlayWindowController(
         try {
             switchEnabled?.isChecked = settings.screenShareEnabled
             switchAutoSkip?.isChecked = settings.autoSkipEnabled
-            switchQuickSkip?.isChecked = settings.quickSkipDialogueEnabled
+            quickSkipChip?.isSelected = settings.quickSkipDialogueEnabled
             switchAutoPick?.isChecked = settings.autoPickEnabled
-            switchAutoLaunch?.isChecked = settings.autoLaunchGenshinEnabled
+            autoLaunchChip?.isSelected = settings.autoLaunchGenshinEnabled
             applyFeatureEnabled(settings)
             refreshLaunchHint()
             refreshStatus()
@@ -165,154 +191,134 @@ class OverlayWindowController(
     }
 
     fun show() {
-        if (rootView != null) return
-        if (!Settings.canDrawOverlays(context)) return
-
+        if (rootView != null || !Settings.canDrawOverlays(context)) return
+        themedContext = OverlayUi.context(context)
+        overlayDensity = context.resources.configuration.densityDpi
+        overlayFontScale = context.resources.configuration.fontScale.coerceAtMost(1.3f)
         val root = LayoutInflater.from(themedContext).inflate(R.layout.overlay_window, null)
-        val bubble = root.findViewById<View>(R.id.overlay_bubble)
-        val panel = root.findViewById<View>(R.id.overlay_panel)
-        val collapse = root.findViewById<ImageButton>(R.id.overlay_collapse)
-        val header = root.findViewById<View>(R.id.overlay_header)
-        val enabledSwitch = root.findViewById<SwitchCompat>(R.id.overlay_switch_enabled)
-        val autoSkipSwitch = root.findViewById<SwitchCompat>(R.id.overlay_switch_auto_skip)
-        val quickSkipSwitch = root.findViewById<SwitchCompat>(R.id.overlay_switch_quick_skip)
-        val autoPickSwitch = root.findViewById<SwitchCompat>(R.id.overlay_switch_auto_pick)
-        val autoLaunchSwitch = root.findViewById<SwitchCompat>(R.id.overlay_switch_auto_launch)
-        val logToggle = root.findViewById<ImageButton>(R.id.overlay_log_toggle)
-
-        bubbleView = bubble
-        panelView = panel
+        bubbleView = root.findViewById(R.id.overlay_bubble)
+        panelView = root.findViewById(R.id.overlay_panel)
         statusDot = root.findViewById(R.id.overlay_status_dot)
         statusText = root.findViewById<TextView>(R.id.overlay_status_text).also { text ->
             text.setOnClickListener {
-                if (InputAccessibilityService.health(themedContext) != AccessibilityServiceHealth.State.CONNECTED) {
+                if (InputAccessibilityService.health(themedContext) != AccessibilityServiceHealth.State.CONNECTED)
                     InputAccessibilityService.ensureEnabled(themedContext)
-                }
+                else if (routeRunning || readoutRunning) expandStatusBar()
             }
         }
         chatBadge = root.findViewById(R.id.overlay_chat_badge)
-        switchEnabled = enabledSwitch
-        switchAutoSkip = autoSkipSwitch
-        switchQuickSkip = quickSkipSwitch
-        switchAutoPick = autoPickSwitch
-        switchAutoLaunch = autoLaunchSwitch
-        launchHint = root.findViewById(R.id.overlay_auto_launch_hint)
+        switchEnabled = root.findViewById(R.id.overlay_switch_enabled)
+        switchAutoSkip = root.findViewById(R.id.overlay_switch_auto_skip)
+        switchAutoPick = root.findViewById(R.id.overlay_switch_auto_pick)
+        quickSkipChip = root.findViewById(R.id.overlay_quick_skip_chip)
+        autoLaunchChip = root.findViewById(R.id.overlay_auto_launch_chip)
         launchSubtitle = root.findViewById(R.id.overlay_launch_subtitle)
-        logToggleButton = logToggle
+        logToggleButton = root.findViewById(R.id.overlay_log_toggle)
         rowAutoSkip = root.findViewById(R.id.overlay_row_auto_skip)
-        rowQuickSkip = root.findViewById(R.id.overlay_row_quick_skip)
+        rowAutoPick = root.findViewById<View>(R.id.overlay_row_auto_pick).also {
+            it.visibility = if (AutoPickFeature.AVAILABLE) View.VISIBLE else View.GONE
+            if (!AutoPickFeature.AVAILABLE) settingsRepository.setAutoPickEnabled(false)
+        }
         rowLaunch = root.findViewById(R.id.overlay_row_launch)
-        rowAutoPick = root.findViewById<View>(R.id.overlay_row_auto_pick).also { row ->
-            row.visibility = if (AutoPickFeature.AVAILABLE) View.VISIBLE else View.GONE
-            if (!AutoPickFeature.AVAILABLE) {
-                settingsRepository.setAutoPickEnabled(false)
-            }
-        }
-        autoSkipExtras = root.findViewById(R.id.overlay_auto_skip_extras)
-        autoSkipChevron = root.findViewById(R.id.overlay_auto_skip_chevron)
-        launchExtras = root.findViewById(R.id.overlay_launch_extras)
-        launchChevron = root.findViewById(R.id.overlay_launch_chevron)
         pathingRow = root.findViewById(R.id.overlay_row_pathing)
-        pathingStatus = root.findViewById(R.id.overlay_pathing_status)
+        pathingStatus = root.findViewById<TextView>(R.id.overlay_pathing_status).apply { text = pathingSummary }
         pathingStart = root.findViewById(R.id.overlay_pathing_start)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            root.findViewById<View>(R.id.overlay_group_pathing)?.visibility = View.GONE
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) root.findViewById<View>(R.id.overlay_group_pathing).visibility = View.GONE
+        val lp = WindowManager.LayoutParams(-2, -2, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.TRANSLUCENT).apply {
+            gravity = Gravity.TOP or Gravity.START; x = prefs.getInt(KEY_X, 0); y = prefs.getInt(KEY_Y, dp(120))
+            if (Build.VERSION.SDK_INT >= 30) setFitInsetsTypes(0)
+            if (Build.VERSION.SDK_INT >= 28) layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
-
-        val layoutParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = prefs.getInt(KEY_X, 0)
-            y = prefs.getInt(KEY_Y, dp(120))
-        }
-
-        setupDragAndClick(bubble, layoutParams) {
-            setExpanded(true)
-        }
-        setupDrag(header, layoutParams, snapOnRelease = false)
-        collapse.setOnClickListener { setExpanded(false) }
-        root.setOnTouchListener { _, event ->
-            if (event.actionMasked == MotionEvent.ACTION_OUTSIDE) {
-                collapseOnOutsideTouch()
-                true
-            } else {
-                false
-            }
-        }
-        logToggle.setOnClickListener { setLogWindowVisible(!logWindowVisible) }
-        rowAutoSkip?.setOnClickListener { setAutoSkipMenuExpanded(!autoSkipMenuExpanded) }
-        rowLaunch?.setOnClickListener { setLaunchMenuExpanded(!launchMenuExpanded) }
-        val startPathing = View.OnClickListener {
+        setupDragAndClick(bubbleView!!, lp) { setExpanded(true) }
+        setupDrag(root.findViewById(R.id.overlay_header), lp, snapOnRelease = false)
+        root.findViewById<View>(R.id.overlay_collapse).setOnClickListener { setExpanded(false) }
+        root.setOnTouchListener { _, event -> if (event.actionMasked == MotionEvent.ACTION_OUTSIDE) { collapseOnOutsideTouch(); true } else false }
+        logToggleButton?.setOnClickListener { setLogWindowVisible(!logWindowVisible) }
+        pathingRow?.setOnClickListener {
             setExpanded(false)
-            onPathingStart?.invoke()
+            if (routeRunning) expandStatusBar() else onPathingOpen?.invoke()
         }
-        pathingRow?.setOnClickListener(startPathing)
-        pathingStart?.setOnClickListener(startPathing)
+        pathingStart?.setOnClickListener {
+            if (routeRunning || readoutRunning) onPathingStop?.invoke()
+            else if (onPathingStart?.invoke() == true) setExpanded(false)
+        }
         root.findViewById<View>(R.id.overlay_launch).setOnClickListener { launchGenshinFromButton() }
-        root.findViewById<ImageButton>(R.id.overlay_bilibili).also { button ->
-            ImageViewCompat.setImageTintList(button, null)
-            button.setOnClickListener { openBilibiliSpace() }
-        }
+        root.findViewById<View>(R.id.overlay_bilibili).setOnClickListener { openBilibiliSpace() }
         root.findViewById<View>(R.id.overlay_exit).setOnClickListener { exitAssistant() }
+        root.findViewById<TextView>(R.id.overlay_warning_action).setOnClickListener {
+            if (InputAccessibilityService.health(themedContext) != AccessibilityServiceHealth.State.CONNECTED)
+                InputAccessibilityService.ensureEnabled(themedContext)
+            else { captureInterrupted = false; settingsRepository.setScreenShareEnabled(true) }
+        }
+        switchEnabled?.contentDescription = "共享屏幕"
+        switchEnabled?.setOnCheckedChangeListener { _, checked ->
+            if (!updatingUi) { captureInterrupted = false; settingsRepository.setScreenShareEnabled(checked)
+                BaiduAnalytics.event("screen_share_toggle", checked.toString()) }
+        }
+        switchAutoSkip?.contentDescription = "自动对话"
+        switchAutoSkip?.setOnCheckedChangeListener { _, checked ->
+            if (!updatingUi) {
+                if (!settingsRepository.get().screenShareEnabled) { hintNeedShare(); updatingUi = true
+                    switchAutoSkip?.isChecked = settingsRepository.get().autoSkipEnabled; updatingUi = false }
+                else { settingsRepository.setAutoSkipEnabled(checked); BaiduAnalytics.event("auto_skip_toggle", checked.toString())
+                    if (checked) InputAccessibilityService.ensureEnabled(themedContext, "请开启无障碍权限，才能模拟点击对话选项") }
+            }
+        }
+        rowAutoSkip?.setOnClickListener { if (!settingsRepository.get().screenShareEnabled) hintNeedShare() else switchAutoSkip?.toggle() }
+        quickSkipChip?.setOnClickListener {
+            val config = settingsRepository.get()
+            if (!config.screenShareEnabled) hintNeedShare() else settingsRepository.setQuickSkipDialogueEnabled(!config.quickSkipDialogueEnabled)
+        }
+        autoLaunchChip?.setOnClickListener { settingsRepository.setAutoLaunchGenshinEnabled(!settingsRepository.get().autoLaunchGenshinEnabled) }
+        switchAutoPick?.setOnCheckedChangeListener { _, checked -> if (!updatingUi) {
+            settingsRepository.setAutoPickEnabled(checked); BaiduAnalytics.event("auto_pick_toggle", checked.toString())
+            if (checked) InputAccessibilityService.ensureEnabled(themedContext, "请开启无障碍权限，才能模拟点击拾取")
+        } }
+        OverlayUi.leadingIcon(quickSkipChip!!, R.drawable.ic_ui_fast_forward, size = 14)
+        OverlayUi.leadingIcon(autoLaunchChip!!, R.drawable.ic_ui_autorenew, size = 14)
+        TooltipCompat.setTooltipText(quickSkipChip!!, "快速跳过：对话中点击屏幕下方继续")
+        TooltipCompat.setTooltipText(autoLaunchChip!!, "无原神时自动启动：启动助手时若未检测到原神则打开一次")
+        listOf(R.id.overlay_collapse, R.id.overlay_log_toggle, R.id.overlay_exit, R.id.overlay_bilibili, R.id.overlay_pathing_start).forEach {
+            root.findViewById<View>(it).let { button -> TooltipCompat.setTooltipText(button, button.contentDescription) }
+        }
+        rootView = root; params = lp
+        root.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if (expanded && (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop)) clampToScreen(lp)
+        }
+        windowManager.addView(root, lp)
+        val mode = prefs.getInt(KEY_STATUS_MODE, if (prefs.getBoolean(KEY_LOG_VISIBLE, false)) 2 else 0)
+        logExpanded = mode == 2; setLogWindowVisible(mode != 0, persist = false)
+        settingsRepository.addListener(settingsListener); startScreenWatch(); a11yWarningReady = false; registerA11yReceiver()
+        mainHandler.postDelayed(refreshA11ySoon, 400); mainHandler.postDelayed(refreshA11yLater, 2000)
+        root.post { resizePanel(); rememberScreen(); clampToScreen(lp); if (!expanded) snapToEdge(lp, false); scheduleIdleFade() }
+        refreshPathingAction()
+    }
 
-        enabledSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (updatingUi) return@setOnCheckedChangeListener
-            settingsRepository.setScreenShareEnabled(isChecked)
-            BaiduAnalytics.event("screen_share_toggle", isChecked.toString())
+    private fun hintNeedShare() {
+        rootView?.findViewById<TextView>(R.id.overlay_auto_skip_hint)?.apply { text = "需先开启共享屏幕"; visibility = View.VISIBLE }
+        rootView?.findViewById<View>(R.id.overlay_row_enabled)?.apply {
+            animate().alpha(.35f).setDuration(160).withEndAction { animate().alpha(1f).setDuration(240).start() }.start()
         }
-        autoSkipSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (updatingUi) return@setOnCheckedChangeListener
-            settingsRepository.setAutoSkipEnabled(isChecked)
-            BaiduAnalytics.event("auto_skip_toggle", isChecked.toString())
-            if (isChecked) {
-                InputAccessibilityService.ensureEnabled(themedContext, "请开启无障碍权限，才能模拟点击对话选项")
-            }
+        resizePanel()
+    }
+
+    private fun resizePanel() {
+        val root = rootView ?: return
+        val safe = OverlayGeometry.safeBounds(windowManager, context.resources.displayMetrics.density,
+            OverlayGeometry.cutoutInsets(root))
+        val panel = panelView ?: return
+        val header = root.findViewById<View>(R.id.overlay_header)
+        val available = (safe.height() - dp(32) - header.measuredHeight.coerceAtLeast(dp(40))).coerceAtLeast(dp(48))
+        root.findViewById<ScrollView>(R.id.overlay_panel_scroll).apply {
+            measure(View.MeasureSpec.makeMeasureSpec(dp(240), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+            val nextHeight = measuredHeight.coerceAtMost(available)
+            if (layoutParams.height != nextHeight) layoutParams = layoutParams.apply { height = nextHeight }
         }
-        quickSkipSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (updatingUi) return@setOnCheckedChangeListener
-            settingsRepository.setQuickSkipDialogueEnabled(isChecked)
-            BaiduAnalytics.event("quick_skip_toggle", isChecked.toString())
-        }
-        autoPickSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (updatingUi) return@setOnCheckedChangeListener
-            settingsRepository.setAutoPickEnabled(isChecked)
-            BaiduAnalytics.event("auto_pick_toggle", isChecked.toString())
-            if (isChecked) {
-                InputAccessibilityService.ensureEnabled(themedContext, "请开启无障碍权限，才能模拟点击拾取")
-            }
-        }
-        autoLaunchSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (updatingUi) return@setOnCheckedChangeListener
-            settingsRepository.setAutoLaunchGenshinEnabled(isChecked)
-            BaiduAnalytics.event("auto_launch_genshin_toggle", isChecked.toString())
-        }
-        rootView = root
-        params = layoutParams
-        windowManager.addView(root, layoutParams)
-        setLogWindowVisible(prefs.getBoolean(KEY_LOG_VISIBLE, false), persist = false)
-        setAutoSkipMenuExpanded(prefs.getBoolean(KEY_AUTO_SKIP_EXPANDED, false), persist = false)
-        setLaunchMenuExpanded(prefs.getBoolean(KEY_LAUNCH_EXPANDED, false), persist = false)
-        settingsRepository.addListener(settingsListener)
-        startScreenWatch()
-        a11yWarningReady = false
-        registerA11yReceiver()
-        mainHandler.postDelayed(refreshA11ySoon, 400L)
-        mainHandler.postDelayed(refreshA11yLater, 2000L)
-        root.post {
-            rememberScreen()
-            clampToScreen(layoutParams)
-            if (!expanded) snapToEdge(layoutParams, animate = false)
-            scheduleIdleFade()
-        }
+        val nextWidth = minOf(dp(256), safe.width())
+        if (panel.layoutParams.width != nextWidth) panel.layoutParams = panel.layoutParams.apply { width = nextWidth }
     }
 
     /**
@@ -391,10 +397,13 @@ class OverlayWindowController(
         unregisterA11yReceiver()
         mainHandler.removeCallbacks(idleFadeRunnable)
         mainHandler.removeCallbacks(clearTalkingRunnable)
+        mainHandler.removeCallbacks(statusTick)
         mainHandler.removeCallbacks(refreshA11ySoon)
         mainHandler.removeCallbacks(refreshA11yLater)
         snapAnimator?.cancel()
         snapAnimator = null
+        bubbleView?.animate()?.cancel()
+        panelView?.animate()?.cancel()
         transforming = false
         expanded = false
         pendingCollapseOnOutside = false
@@ -415,20 +424,14 @@ class OverlayWindowController(
         params = null
         switchEnabled = null
         switchAutoSkip = null
-        switchQuickSkip = null
+        quickSkipChip = null
+        autoLaunchChip = null
         switchAutoPick = null
-        switchAutoLaunch = null
-        launchHint = null
         launchSubtitle = null
         logToggleButton = null
         rowAutoSkip = null
-        rowQuickSkip = null
         rowAutoPick = null
         rowLaunch = null
-        autoSkipExtras = null
-        autoSkipChevron = null
-        launchExtras = null
-        launchChevron = null
         pathingRow = null
         pathingStatus = null
         pathingStart = null
@@ -452,25 +455,19 @@ class OverlayWindowController(
         when (genshinLauncher.launch()) {
             is GenshinLaunchResult.Started -> setExpanded(false)
             GenshinLaunchResult.NotInstalled -> {
-                Toast.makeText(themedContext, "未安装原神", Toast.LENGTH_SHORT).show()
+                launchSubtitle?.apply { text = "未安装原神"; visibility = View.VISIBLE }
                 refreshLaunchHint()
             }
             is GenshinLaunchResult.Failed -> {
-                Toast.makeText(themedContext, "无法启动原神", Toast.LENGTH_SHORT).show()
+                launchSubtitle?.apply { text = "无法启动原神"; visibility = View.VISIBLE }; resizePanel()
             }
         }
     }
 
     private fun refreshLaunchHint() {
-        val pkg = genshinLauncher.resolveInstalledPackage()
-        if (pkg != null) {
-            val name = GenshinPackages.displayName(pkg)
-            launchSubtitle?.text = "打开已安装的$name"
-            launchHint?.text = "启动助手时若未检测到${name}则打开一次"
-        } else {
-            launchSubtitle?.text = "未安装原神"
-            launchHint?.text = "未安装原神"
-        }
+        val installed = genshinLauncher.resolveInstalledPackage() != null
+        launchSubtitle?.apply { text = if (installed) "" else "未安装原神"; visibility = if (installed) View.GONE else View.VISIBLE }
+        rootView?.findViewById<View>(R.id.overlay_launch)?.apply { isEnabled = installed; alpha = if (installed) 1f else .38f }
     }
 
     private fun exitAssistant() {
@@ -512,6 +509,7 @@ class OverlayWindowController(
 
         if (value) {
             refreshLaunchHint()
+            resizePanel()
             mainHandler.removeCallbacks(idleFadeRunnable)
             panel.alpha = 0f
             panel.scaleX = 0.84f
@@ -591,14 +589,19 @@ class OverlayWindowController(
 
     private fun applyFeatureEnabled(settings: TriggerSettings) {
         val shareOn = settings.screenShareEnabled
-        val autoSkipOn = shareOn && settings.autoSkipEnabled
-        switchAutoSkip?.isEnabled = shareOn
+        switchAutoSkip?.alpha = if (shareOn) 1f else .38f
         switchAutoPick?.isEnabled = shareOn
-        switchQuickSkip?.isEnabled = autoSkipOn
-        rowAutoSkip?.alpha = if (shareOn) 1f else 0.45f
-        rowAutoPick?.alpha = if (shareOn) 1f else 0.45f
-        rowQuickSkip?.alpha = if (autoSkipOn) 1f else 0.45f
-        pathingRow?.alpha = if (shareOn) 1f else 0.45f
+        rowAutoPick?.alpha = if (shareOn) 1f else .45f
+        quickSkipChip?.apply { alpha = if (shareOn) 1f else .38f
+            text = if (overlayFontScale > 1.1f) "快跳" else "快速跳过"
+            setTextColor(ContextCompat.getColor(themedContext, if (settings.quickSkipDialogueEnabled) R.color.pocket_primary else R.color.pocket_text_secondary))
+            setBackgroundResource(if (settings.quickSkipDialogueEnabled) R.drawable.bg_pocket_chip else R.drawable.bg_pocket_group)
+        }
+        autoLaunchChip?.apply {
+            setTextColor(ContextCompat.getColor(themedContext, if (settings.autoLaunchGenshinEnabled) R.color.pocket_primary else R.color.pocket_text_secondary))
+            setBackgroundResource(if (settings.autoLaunchGenshinEnabled) R.drawable.bg_pocket_chip else R.drawable.bg_pocket_group)
+        }
+        if (shareOn) rootView?.findViewById<View>(R.id.overlay_auto_skip_hint)?.visibility = View.GONE
     }
 
     override fun onTalkHistoryMatched() {
@@ -618,71 +621,139 @@ class OverlayWindowController(
         appendLog("点击对话选项 ($x, $y)")
     }
 
-    fun log(message: String) {
-        Log.i(TAG, message)
-        appendLog(message)
+    fun log(message: String, level: LogLevel = LogLevel.Info) {
+        Log.i(TAG, message); appendLog(message, level)
     }
 
-    fun setPathingRunning(running: Boolean) {
-        mainHandler.post {
+    fun setPathingRunning(running: Boolean) { mainHandler.post {
+        readoutRunning = running
+        if (running) { if (!logWindowVisible) { logExpanded = false; setLogWindowVisible(true) }; setExpanded(false) }
+        refreshPathingAction(); refreshStatus(); updateStatusTick()
+    } }
+
+    fun setRouteRunning(running: Boolean) { mainHandler.post {
+        routeRunning = running
+        if (running) {
+            progress = null
+            if (!logWindowVisible) { logExpanded = false; setLogWindowVisible(true) }
+            setExpanded(false)
+        }
+        refreshPathingAction(); refreshStatus(); updateStatusTick()
+    } }
+
+    private fun updateStatusTick() {
+        mainHandler.removeCallbacks(statusTick)
+        if (routeRunning || readoutRunning) mainHandler.postDelayed(statusTick, 1000)
+    }
+
+    fun updateProgress(value: PathingProgress) { mainHandler.post {
+        progress = value
+        pathingStatus?.text = if (value.finished) "${logTimeFormat.format(Date())} 完成 ${value.completed} · 跳过 ${value.skipped} · 失败 ${value.failed}" else "${value.index}/${value.total} · ${value.name}"
+        rootView?.findViewById<ProgressBar>(R.id.overlay_pathing_progress)?.apply { max = value.total.coerceAtLeast(1); progress = if (value.finished) value.total else value.index - 1 }
+        refreshStatus()
+    } }
+
+    private fun refreshPathingAction() {
+        val running = routeRunning || readoutRunning
+        pathingStart?.apply {
+            setImageResource(if (running) R.drawable.ic_ui_stop else R.drawable.ic_ui_play_arrow)
+            imageTintList = ColorStateList.valueOf(ContextCompat.getColor(themedContext,
+                if (running) R.color.pocket_error else if (hasRouteSelection) R.color.pocket_primary else R.color.pocket_text_disabled))
+            contentDescription = if (running) "停止地图追踪" else if (hasRouteSelection) "执行上次选择的路线" else "选择路线"
+            TooltipCompat.setTooltipText(this, contentDescription)
+        }
+        rootView?.findViewById<View>(R.id.overlay_pathing_progress)?.visibility = if (routeRunning) View.VISIBLE else View.GONE
+        logHandleView?.findViewById<View>(R.id.overlay_log_stop)?.visibility = if (running) View.VISIBLE else View.GONE
+        logHandleView?.findViewById<ImageView>(R.id.overlay_log_icon)?.apply {
             if (running) {
-                if (!logWindowVisible) {
-                    setLogWindowVisible(true)
-                }
-            }
+                setImageDrawable(null)
+                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(ContextCompat.getColor(themedContext, R.color.pocket_primary)) }
+            } else { background = null; setImageResource(R.drawable.ic_ui_article) }
+            layoutParams = layoutParams.apply { width = dp(if (running) 8 else 16); height = width }
         }
     }
 
-    fun setRouteRunning(running: Boolean) {
-        mainHandler.post {
-            pathingStart?.text = if (running) "停止" else "开始"
-            if (running) {
-                if (!logWindowVisible) setLogWindowVisible(true)
-            }
-        }
+    fun showPathing(routeLabel: String, hasSelection: Boolean = true) { mainHandler.post {
+        pathingSummary = routeLabel
+        hasRouteSelection = hasSelection
+        if (!routeRunning && !readoutRunning) { pathingStatus?.text = routeLabel
+            pathingStatus?.setTextColor(ContextCompat.getColor(themedContext, R.color.pocket_text_secondary)) }
+        refreshPathingAction()
+    } }
+
+    fun setPathingStatus(text: String) { mainHandler.post {
+        latestPathingStatus = text
+        if (progress?.finished != true || routeRunning || readoutRunning) pathingStatus?.text = text
+        pathingStatus?.setTextColor(ContextCompat.getColor(themedContext,
+            if (!routeRunning && !readoutRunning && progress?.finished != true && text != "已停止") R.color.pocket_warning else R.color.pocket_text_secondary))
+        refreshStatus()
+    } }
+
+    fun showCaptureInterrupted() { mainHandler.post { captureInterrupted = true; refreshStatus() } }
+
+    fun expandStatusBar() {
+        if (!logWindowVisible) setLogWindowVisible(true)
+        logExpanded = true; applyLogMode(); refreshStatus()
     }
 
-    fun showPathing(routeLabel: String) {
-        mainHandler.post {
-            pathingStatus?.text = routeLabel
-        }
-    }
-
-    fun setPathingStatus(text: String) {
-        mainHandler.post {
-            pathingStatus?.text = text
-        }
-    }
-
-    private fun appendLog(message: String) {
-        mainHandler.post {
-            val line = "${logTimeFormat.format(Date())} $message"
-            if (logLines.size >= MAX_LOG_LINES) {
-                logLines.removeFirst()
-            }
-            logLines.addLast(line)
-            renderLog()
-        }
-    }
+    private fun appendLog(message: String, level: LogLevel = LogLevel.Info) { mainHandler.post {
+        // 路线文件名由批执行器统一缩短，保留其他日志中的有效上下文。
+        if (logLines.size >= MAX_LOG_LINES) logLines.removeFirst()
+        logLines.addLast(LogLine(logTimeFormat.format(Date()), message, level))
+        renderLog(); refreshLogTitle()
+    } }
 
     private fun renderLog() {
         val text = logText ?: return
         if (!logWindowVisible) return
-        text.text = if (logLines.isEmpty()) "等待识别…" else logLines.joinToString("\n")
-        logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
+        val builder = SpannableStringBuilder()
+        if (logLines.isEmpty()) builder.append("等待识别…")
+        for (line in logLines) {
+            if (builder.isNotEmpty()) builder.append('\n')
+            val start = builder.length; builder.append(line.time).append("  ")
+            builder.setSpan(ForegroundColorSpan(ContextCompat.getColor(themedContext, R.color.pocket_text_secondary)), start, builder.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            builder.append(line.message)
+            if (line.level != LogLevel.Info) builder.setSpan(ForegroundColorSpan(ContextCompat.getColor(themedContext,
+                if (line.level == LogLevel.Warning) R.color.pocket_warning else R.color.pocket_error)), start, builder.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        text.text = builder; logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
     }
 
     private fun setLogWindowVisible(visible: Boolean, persist: Boolean = true) {
-        if (persist) {
-            prefs.edit().putBoolean(KEY_LOG_VISIBLE, visible).apply()
-        }
         logWindowVisible = visible
-        if (visible) {
-            showLogWindow()
-        } else {
-            hideLogWindow()
-        }
+        if (visible) showLogWindow() else hideLogWindow()
+        if (persist) persistLogMode()
         refreshLogToggle()
+    }
+
+    private fun persistLogMode() { prefs.edit().putInt(KEY_STATUS_MODE, if (!logWindowVisible) 0 else if (logExpanded) 2 else 1).apply() }
+
+    private fun applyLogMode() {
+        logBodyView?.visibility = if (logExpanded) View.VISIBLE else View.GONE
+        logHandleView?.findViewById<ImageButton>(R.id.overlay_log_expand)?.apply {
+            setImageResource(if (logExpanded) R.drawable.ic_ui_expand_less else R.drawable.ic_ui_expand_more)
+            contentDescription = if (logExpanded) "收起日志正文" else "展开日志正文"; TooltipCompat.setTooltipText(this, contentDescription)
+        }
+        persistLogMode(); clampLogWindows()
+    }
+
+    private fun refreshLogTitle() {
+        val p = progress
+        logHandleView?.findViewById<TextView>(R.id.overlay_log_elapsed)?.apply {
+            visibility = if (routeRunning && p != null) View.VISIBLE else View.GONE
+            if (routeRunning && p != null) {
+                val seconds = ((System.currentTimeMillis() - p.startedAtMs) / 1000).coerceAtLeast(0)
+                text = "%02d:%02d".format(seconds / 60, seconds % 60)
+            }
+        }
+        logTitle?.text = when {
+            routeRunning && p != null -> "${p.index}/${p.total} · ${p.name}"
+            routeRunning -> latestPathingStatus.ifEmpty { "正在读取路线…" }
+            readoutRunning -> latestPathingStatus
+            p?.finished == true -> "完成 ${p.completed} · 跳过 ${p.skipped} · 失败 ${p.failed}"
+            else -> logLines.lastOrNull()?.message ?: "等待识别…"
+        }
+        logTitle?.contentDescription = logTitle?.text
     }
 
     private fun refreshLogToggle() {
@@ -690,27 +761,9 @@ class OverlayWindowController(
         button.isSelected = logWindowVisible
         val color = ContextCompat.getColor(
             themedContext,
-            if (logWindowVisible) R.color.overlay_log_green else R.color.overlay_text_muted,
+            if (logWindowVisible) R.color.pocket_primary else R.color.pocket_text_secondary,
         )
         ImageViewCompat.setImageTintList(button, ColorStateList.valueOf(color))
-    }
-
-    private fun setAutoSkipMenuExpanded(expanded: Boolean, persist: Boolean = true) {
-        autoSkipMenuExpanded = expanded
-        if (persist) {
-            prefs.edit().putBoolean(KEY_AUTO_SKIP_EXPANDED, expanded).apply()
-        }
-        autoSkipExtras?.visibility = if (expanded) View.VISIBLE else View.GONE
-        autoSkipChevron?.animate()?.rotation(if (expanded) 90f else 0f)?.setDuration(160)?.start()
-    }
-
-    private fun setLaunchMenuExpanded(expanded: Boolean, persist: Boolean = true) {
-        launchMenuExpanded = expanded
-        if (persist) {
-            prefs.edit().putBoolean(KEY_LAUNCH_EXPANDED, expanded).apply()
-        }
-        launchExtras?.visibility = if (expanded) View.VISIBLE else View.GONE
-        launchChevron?.animate()?.rotation(if (expanded) 90f else 0f)?.setDuration(160)?.start()
     }
 
     private fun isTalking(): Boolean = System.currentTimeMillis() < talkingUntilMs
@@ -738,8 +791,9 @@ class OverlayWindowController(
     private fun refreshStatus() {
         val enabled = settingsRepository.get().screenShareEnabled
         val talking = isTalking()
-        val a11yDisconnected = a11yWarningReady &&
-            InputAccessibilityService.health(themedContext) == AccessibilityServiceHealth.State.DISCONNECTED
+        val a11yHealth = InputAccessibilityService.health(themedContext)
+        val a11yDisconnected = a11yWarningReady && a11yHealth == AccessibilityServiceHealth.State.DISCONNECTED
+        val a11yUnavailable = a11yWarningReady && a11yHealth != AccessibilityServiceHealth.State.CONNECTED
         val colorRes = when {
             a11yDisconnected -> R.color.overlay_status_warn
             talking -> R.color.overlay_status_on
@@ -752,19 +806,23 @@ class OverlayWindowController(
                 DrawableCompat.setTint(DrawableCompat.wrap(drawable).mutate(), color)
             }
         statusText?.text = when {
-            a11yDisconnected -> "无障碍异常"
-            talking -> "正在对话中"
-            enabled -> "已启动"
-            else -> "未启动"
+            a11yUnavailable -> "无障碍异常"
+            routeRunning -> progress?.let { "路线 ${it.index}/${it.total}" } ?: "路线执行中"
+            readoutRunning -> "坐标显示中"
+            talking -> "对话中"
+            enabled -> "共享中"
+            else -> "未共享"
         }
-        statusText?.setTextColor(
-            when {
-                a11yDisconnected -> ContextCompat.getColor(themedContext, R.color.overlay_status_warn)
-                talking || enabled -> ContextCompat.getColor(themedContext, R.color.overlay_status_on)
-                else -> ContextCompat.getColor(themedContext, R.color.overlay_text_muted)
-            },
-        )
-        logTitle?.text = if (talking) "正在对话中" else "识别日志"
+        statusText?.setTextColor(ContextCompat.getColor(themedContext, when {
+            a11yUnavailable -> R.color.pocket_warning
+            routeRunning || readoutRunning -> R.color.pocket_primary
+            talking || enabled -> R.color.pocket_success
+            else -> R.color.pocket_text_secondary
+        }))
+        rootView?.findViewById<View>(R.id.overlay_warning)?.visibility = if (a11yUnavailable || captureInterrupted) View.VISIBLE else View.GONE
+        rootView?.findViewById<TextView>(R.id.overlay_warning_text)?.text = if (a11yUnavailable) "无障碍未连接" else "屏幕共享被中断"
+        refreshLogTitle()
+        if (expanded) resizePanel()
         val badge = chatBadge
         if (badge != null) {
             val showBadge = talking
@@ -789,9 +847,9 @@ class OverlayWindowController(
         logScroll = body.findViewById(R.id.overlay_log_scroll)
         renderLog()
 
-        val width = dp(LOG_WIDTH_DP)
+        val width = logWidth()
         val (defaultX, defaultY) = defaultLogPosition()
-        val minY = statusBarHeight()
+        val minY = safeBounds().top
         val x = prefs.getInt(KEY_LOG_X, defaultX)
         val savedY = prefs.getInt(KEY_LOG_Y, defaultY)
         val y = if (savedY < minY) defaultY else savedY
@@ -816,13 +874,21 @@ class OverlayWindowController(
         logHandleParams = handleParams
         logBodyParams = bodyParams
         setupLogDrag(handle.findViewById(R.id.overlay_log_drag), handleParams)
+        handle.findViewById<View>(R.id.overlay_log_stop).setOnClickListener { onPathingStop?.invoke() }
+        handle.findViewById<View>(R.id.overlay_log_expand).setOnClickListener { logExpanded = !logExpanded; applyLogMode() }
+        listOf(R.id.overlay_log_stop, R.id.overlay_log_expand, R.id.overlay_log_close).forEach { id ->
+            handle.findViewById<View>(id).let { TooltipCompat.setTooltipText(it, it.contentDescription) }
+        }
+        logScroll?.layoutParams = logScroll?.layoutParams?.apply { height = dp(if (safeBounds().height() / context.resources.displayMetrics.density < 400) 100 else 200) }
+        body.visibility = if (logExpanded) View.VISIBLE else View.GONE
+        refreshPathingAction(); refreshLogTitle()
         handle.findViewById<View>(R.id.overlay_log_close).setOnClickListener {
             setLogWindowVisible(false)
         }
         try {
             windowManager.addView(body, bodyParams)
             windowManager.addView(handle, handleParams)
-            handle.post { clampLogWindows() }
+            handle.post { applyLogMode() }
         } catch (_: Throwable) {
             hideLogWindow()
         }
@@ -878,10 +944,12 @@ class OverlayWindowController(
         var startY = 0
         var touchX = 0f
         var touchY = 0f
+        var moved = false
 
         dragHandle.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    moved = false
                     startX = lp.x
                     startY = lp.y
                     touchX = event.rawX
@@ -889,12 +957,15 @@ class OverlayWindowController(
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
+                    if (kotlin.math.abs(event.rawX - touchX) > touchSlop || kotlin.math.abs(event.rawY - touchY) > touchSlop) moved = true
+                    if (!moved) return@setOnTouchListener true
                     lp.x = startX + (event.rawX - touchX).toInt()
                     lp.y = startY + (event.rawY - touchY).toInt()
                     clampLogWindows()
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (!moved && event.actionMasked == MotionEvent.ACTION_UP) { dragHandle.performClick(); logExpanded = !logExpanded; applyLogMode() }
                     persistLogPosition(lp)
                     true
                 }
@@ -906,16 +977,13 @@ class OverlayWindowController(
     private fun clampLogWindows() {
         val handleLp = logHandleParams ?: return
         val handle = logHandleView ?: return
-        val screen = screenSize()
-        val width = if (handle.width > 0) handle.width else dp(LOG_WIDTH_DP)
+        val safe = safeBounds()
+        handleLp.width = logWidth(); logBodyParams?.width = handleLp.width
+        val width = handleLp.width
         val handleHeight = if (handle.height > 0) handle.height else dp(28)
-        val bodyHeight = logBodyView?.height?.takeIf { it > 0 } ?: dp(120)
-        val minY = statusBarHeight()
-        handleLp.x = handleLp.x.coerceIn(0, (screen.first - width).coerceAtLeast(0))
-        handleLp.y = handleLp.y.coerceIn(
-            minY,
-            (screen.second - handleHeight - bodyHeight).coerceAtLeast(minY),
-        )
+        val bodyHeight = if (logExpanded) logBodyView?.height?.takeIf { it > 0 } ?: dp(120) else 0
+        handleLp.x = handleLp.x.coerceIn(safe.left, (safe.right - width).coerceAtLeast(safe.left))
+        handleLp.y = handleLp.y.coerceIn(safe.top, (safe.bottom - handleHeight - bodyHeight).coerceAtLeast(safe.top))
         updateLogLayouts()
     }
 
@@ -1078,10 +1146,11 @@ class OverlayWindowController(
     private fun clampToScreen(lp: WindowManager.LayoutParams) {
         val view = rootView ?: return
         val screen = screenSize()
+        val safe = if (expanded) safeBounds() else android.graphics.Rect(0, 0, screen.first, screen.second)
         val width = if (view.width > 0) view.width else dp(48)
         val height = if (view.height > 0) view.height else dp(48)
-        lp.x = lp.x.coerceIn(0, (screen.first - width).coerceAtLeast(0))
-        lp.y = lp.y.coerceIn(0, (screen.second - height).coerceAtLeast(0))
+        lp.x = lp.x.coerceIn(safe.left, (safe.right - width).coerceAtLeast(safe.left))
+        lp.y = lp.y.coerceIn(safe.top, (safe.bottom - height).coerceAtLeast(safe.top))
         updateLayout(lp)
     }
 
@@ -1141,6 +1210,7 @@ class OverlayWindowController(
         if (!force && screen.first == lastScreenW && screen.second == lastScreenH) return
         snapAnimator?.cancel()
         root.post {
+            resizePanel()
             rememberScreen()
             val lp = params ?: return@post
             clampToScreen(lp)
@@ -1165,21 +1235,14 @@ class OverlayWindowController(
         return metrics.widthPixels to metrics.heightPixels
     }
 
-    private fun defaultLogPosition(): Pair<Int, Int> {
-        val screen = screenSize()
-        val height = dp(LOG_DEFAULT_HEIGHT_DP)
-        val margin = dp(12)
-        val x = margin
-        val y = (screen.second - height - dp(48)).coerceAtLeast(statusBarHeight())
-        return x to y
-    }
+    private fun safeBounds() = OverlayGeometry.safeBounds(windowManager, context.resources.displayMetrics.density,
+        OverlayGeometry.cutoutInsets(rootView))
 
-    private fun statusBarHeight(): Int {
-        val id = context.resources.getIdentifier("status_bar_height", "dimen", "android")
-        if (id > 0) {
-            return context.resources.getDimensionPixelSize(id)
-        }
-        return dp(28)
+    private fun logWidth(): Int = minOf(dp(320), (safeBounds().width() * .4f).toInt()).coerceAtLeast(dp(120))
+
+    private fun defaultLogPosition(): Pair<Int, Int> {
+        val safe = safeBounds()
+        return (safe.centerX() - logWidth() / 2) to (safe.top + dp(40))
     }
 
     private fun dp(value: Int): Int {
@@ -1194,10 +1257,7 @@ class OverlayWindowController(
         private const val KEY_LOG_X = "log_x"
         private const val KEY_LOG_Y = "log_y"
         private const val KEY_LOG_VISIBLE = "log_visible"
-        private const val KEY_AUTO_SKIP_EXPANDED = "auto_skip_expanded"
-        private const val KEY_LAUNCH_EXPANDED = "launch_expanded"
-        private const val LOG_WIDTH_DP = 260
-        private const val LOG_DEFAULT_HEIGHT_DP = 204
+        private const val KEY_STATUS_MODE = "status_mode"
         private const val IDLE_ALPHA = 0.62f
         private const val IDLE_DELAY_MS = 2400L
         private const val TALKING_HOLD_MS = 2000L

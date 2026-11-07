@@ -25,8 +25,8 @@ import com.bettergi.pocket.pathing.vision.UnavailablePathingVision
 import java.util.concurrent.CancellationException
 
 /**
- * 挂在前台服务上的地图追踪入口。第二阶段只启动只读定位，不注入触控。
- * 后续路线执行也走这一条 `PathingWorker` 线程。
+ * 挂在前台服务上的地图追踪入口。只读定位不注入触控，路线执行复用同一入口。
+ * 两类任务都走这一条 `PathingWorker` 线程。
  */
 class PathingController(
     private val frames: PathingFrameSource,
@@ -43,6 +43,7 @@ class PathingController(
     private val vision: PathingVision = UnavailablePathingVision,
     private val bigMap: BigMapUi = UnavailableBigMapUi,
     private val partyAssets: android.content.res.AssetManager? = null,
+    private val onProgress: (PathingProgress) -> Unit = {},
 ) {
     private val lock = Any()
     private var runtime: PathingRuntime? = null
@@ -178,42 +179,36 @@ class PathingController(
         }
     }
 
-    private fun startRouteLocked() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            log("地图追踪需要 Android 8.0 以上")
-            return
-        }
-        if (!InputAccessibilityService.isConnected()) {
-            log("请先开启无障碍服务，才能模拟触控")
-            onStatus("无障碍未连接")
-            return
-        }
-        val size = captureSize()
-        if (size == null) {
-            log(LocationReadoutChecks.NEED_CAPTURE)
-            onStatus(LocationReadoutChecks.NEED_CAPTURE)
-            return
-        }
-        if (genshinInForeground() == false) {
-            log(LocationReadoutChecks.GENSHIN_BACKGROUND)
-            onStatus(LocationReadoutChecks.GENSHIN_BACKGROUND)
-            return
-        }
-        val layout = try {
-            loadLayout()
-        } catch (e: Exception) {
-            val message = "无法读取标定数据：${e.message ?: e.javaClass.simpleName}"
-            log(message)
-            onStatus(message)
-            return
+    /** 与启动共用的只读前置检查，界面可以提前展示拒绝原因。 */
+    fun preflight(): PathingPreflight = checkRoutePrerequisites().result
+
+    private data class RoutePrerequisites(
+        val result: PathingPreflight,
+        val layout: PathingLayout? = null,
+        val size: Pair<Int, Int>? = null,
+    )
+
+    private fun checkRoutePrerequisites(): RoutePrerequisites {
+        fun refused(reason: String, action: PathingPreflight.Action? = null) =
+            RoutePrerequisites(PathingPreflight(reason, action))
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return refused("地图追踪需要 Android 8.0 以上")
+        if (!InputAccessibilityService.isConnected()) return refused("无障碍未连接", PathingPreflight.Action.Accessibility)
+        val size = captureSize() ?: return refused(LocationReadoutChecks.NEED_CAPTURE, PathingPreflight.Action.ScreenShare)
+        if (genshinInForeground() == false) return refused(LocationReadoutChecks.GENSHIN_BACKGROUND)
+        val layout = try { loadLayout() } catch (e: Exception) {
+            return refused("无法读取标定数据：${e.message ?: e.javaClass.simpleName}")
         }
         val missing = missingCalibration(layout)
-        if (missing.isNotEmpty()) {
-            val message = "还没标定：${missing.joinToString("、")}"
-            log(message)
-            onStatus(message)
-            return
-        }
+        if (missing.isNotEmpty()) return refused("还没标定：${missing.joinToString("、")}")
+        return RoutePrerequisites(PathingPreflight(), layout, size)
+    }
+
+    private fun startRouteLocked() {
+        val prerequisites = checkRoutePrerequisites()
+        val check = prerequisites.result
+        if (!check.ready) { log(check.reason!!); onStatus(check.reason); return }
+        val size = prerequisites.size!!
+        val layout = prerequisites.layout!!
         val runtime = PathingRuntime(frames, stopCheck = { routeStopReason() })
         this.runtime = runtime
         TaskGate.exclusiveRunning = true
@@ -254,7 +249,7 @@ class PathingController(
                     log = log,
                 )
                 val settings = pathingSettings()
-                val summary = RouteBatchRunner({ runtime.delay(0) }, log, onStatus).run(routes) { route ->
+                val summary = RouteBatchRunner({ runtime.delay(0) }, log, onStatus, onProgress).run(routes) { route ->
                     // 每条路线一个执行器，卡死次数和跳过状态不跨路线（BGI 每条路线 new PathExecutor）
                     val needsParty = settings.needsParty ||
                         route.waypoints.any { it.action?.let(com.bettergi.pocket.pathing.party.PathingParty::elementFor) != null }

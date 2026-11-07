@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="360" viewBox="0 0 800 360">
+  <defs>
+    <style>
+      text{font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif}
+      .h{font-size:15px;font-weight:700;fill:#F7F0E4}
+      .b{font-size:13px;fill:#F7F0E4}
+      .l{font-size:12px;font-weight:600;fill:#F7F0E4}
+      .c{font-size:11px;fill:rgba(247,240,228,.7)}
+      .sec{font-size:11px;font-weight:700;fill:rgba(247,240,228,.7)}
+      .gold{fill:#C9A36A}.mu{fill:rgba(247,240,228,.7)}.dis{fill:rgba(247,240,228,.38)}
+    </style>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3f63b0"/><stop offset=".6" stop-color="#7aa3dd"/>
+      <stop offset=".6" stop-color="#cddcf1"/><stop offset="1" stop-color="#a9c3e6"/>
+    </linearGradient>
+    <symbol id="close" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
+    <symbol id="chev" viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></symbol>
+    <symbol id="loc" viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></symbol>
+    <symbol id="map" viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></symbol>
+    <symbol id="minus" viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></symbol>
+    <symbol id="plus" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></symbol>
+    <symbol id="info" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></symbol>
+    <symbol id="walk" viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/></symbol>
+    <symbol id="shield" viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></symbol>
+    <symbol id="drop" viewBox="0 0 24 24"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8z"/></symbol>
+    <symbol id="bolt" viewBox="0 0 24 24"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"/></symbol>
+    <symbol id="air" viewBox="0 0 24 24"><path d="M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3zM19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.33 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5zm-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5v2c1.93 0 3.5-1.57 3.5-3.5S20.43 11 18.5 11z"/></symbol>
+    <symbol id="fire" viewBox="0 0 24 24"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/></symbol>
+  </defs>
+
+  <rect width="800" height="360" fill="url(#sky)"/>
+  <rect x="20" y="8" width="760" height="344" rx="14" fill="rgba(28,22,18,.97)" stroke="rgba(201,163,106,.4)"/>
+
+  <!-- 标题栏：设置页签选中 -->
+  <use href="#map" x="32" y="20" width="20" height="20" fill="rgba(247,240,228,.7)"/>
+  <text x="60" y="36" class="h">地图追踪</text>
+  <rect x="148.5" y="16.5" width="140" height="27" rx="8" fill="none" stroke="rgba(201,163,106,.45)"/>
+  <path d="M219 17h61a8 8 0 0 1 8 8v10a8 8 0 0 1-8 8h-61z" fill="rgba(201,163,106,.22)"/>
+  <rect x="218.5" y="17" width="1" height="26" fill="rgba(201,163,106,.45)"/>
+  <text x="183.5" y="34.5" class="l mu" text-anchor="middle">路线</text>
+  <text x="253.5" y="34.5" class="l gold" text-anchor="middle">设置</text>
+  <use href="#loc" x="714" y="20" width="20" height="20" fill="rgba(247,240,228,.7)"/>
+  <use href="#close" x="746" y="20" width="20" height="20" fill="rgba(247,240,228,.7)"/>
+  <rect x="20" y="52" width="760" height="1" fill="rgba(255,255,255,.08)"/>
+
+  <!-- 左栏：执行 -->
+  <text x="36" y="72" class="sec">执行</text>
+  <rect x="32" y="80" width="360" height="148" rx="10" fill="rgba(255,255,255,.06)"/>
+
+  <text x="44" y="102" class="b">地图匹配</text>
+  <text x="44" y="119" class="c">路线未指定时使用</text>
+  <rect x="244.5" y="92.5" width="135" height="27" rx="8" fill="none" stroke="rgba(201,163,106,.45)"/>
+  <path d="M253 93h59v26h-59a8 8 0 0 1-8-8v-10a8 8 0 0 1 8-8z" fill="rgba(201,163,106,.22)"/>
+  <rect x="312.5" y="93" width="1" height="26" fill="rgba(201,163,106,.45)"/>
+  <text x="279" y="110.5" class="l gold" text-anchor="middle">模板匹配</text>
+  <text x="346" y="110.5" class="l mu" text-anchor="middle">SIFT</text>
+  <rect x="44" y="132" width="348" height="1" fill="rgba(255,255,255,.07)"/>
+
+  <text x="44" y="159" class="b">自动小道具</text>
+  <rect x="228.5" y="140.5" width="103" height="27" rx="8" fill="none" stroke="rgba(247,240,228,.18)"/>
+  <use href="#minus" x="236" y="146" width="16" height="16" fill="#F7F0E4"/>
+  <text x="280" y="158.5" class="l" text-anchor="middle">1.0 s</text>
+  <use href="#plus" x="308" y="146" width="16" height="16" fill="#F7F0E4"/>
+  <rect x="344" y="144" width="36" height="20" rx="10" fill="#C9A36A"/><circle cx="370" cy="154" r="7.5" fill="#1C1612"/>
+  <rect x="44" y="176" width="348" height="1" fill="rgba(255,255,255,.07)"/>
+
+  <text x="44" y="198" class="b">续盾间隔</text>
+  <text x="44" y="215" class="c">自动 = 按角色战技冷却</text>
+  <rect x="276.5" y="188.5" width="103" height="27" rx="8" fill="none" stroke="rgba(247,240,228,.18)"/>
+  <use href="#minus" x="284" y="194" width="16" height="16" fill="rgba(247,240,228,.3)"/>
+  <text x="328" y="206.5" class="l" text-anchor="middle">自动</text>
+  <use href="#plus" x="356" y="194" width="16" height="16" fill="#F7F0E4"/>
+
+  <!-- 右栏：队伍角色 -->
+  <text x="412" y="72" class="sec">队伍角色<tspan class="c" style="font-weight:400" dx="6">需单人四人队伍，执行中不要手动切人</tspan></text>
+  <use href="#info" x="752" y="61" width="14" height="14" fill="rgba(247,240,228,.55)"/>
+  <rect x="408" y="80" width="360" height="120" rx="10" fill="rgba(255,255,255,.06)"/>
+
+  <use href="#walk" x="420" y="91" width="18" height="18" fill="rgba(247,240,228,.7)"/>
+  <text x="446" y="105" class="b mu">行走位</text>
+  <text x="524" y="105" class="b">迪希雅</text>
+  <text x="740" y="104" class="l mu" text-anchor="end">1</text>
+  <use href="#chev" x="744" y="92" width="16" height="16" fill="rgba(247,240,228,.5)"/>
+  <rect x="446" y="120" width="322" height="1" fill="rgba(255,255,255,.07)"/>
+
+  <use href="#shield" x="420" y="131" width="18" height="18" fill="rgba(247,240,228,.7)"/>
+  <text x="446" y="145" class="b mu">生存位·短E</text>
+  <text x="524" y="145" class="b">绮良良、莱依拉、茜特菈莉…</text>
+  <text x="740" y="144" class="l mu" text-anchor="end">5</text>
+  <use href="#chev" x="744" y="132" width="16" height="16" fill="rgba(247,240,228,.5)"/>
+  <rect x="446" y="160" width="322" height="1" fill="rgba(255,255,255,.07)"/>
+
+  <use href="#shield" x="420" y="171" width="18" height="18" fill="rgba(247,240,228,.7)"/>
+  <text x="446" y="185" class="b mu">生存位·长E</text>
+  <text x="524" y="185" class="b">钟离</text>
+  <text x="740" y="184" class="l mu" text-anchor="end">1</text>
+  <use href="#chev" x="744" y="172" width="16" height="16" fill="rgba(247,240,228,.5)"/>
+
+  <text x="412" y="224" class="sec">元素采集<tspan class="c" style="font-weight:400" dx="6">路线包含对应采集动作时才使用</tspan></text>
+  <use href="#info" x="752" y="213" width="14" height="14" fill="rgba(247,240,228,.55)"/>
+  <rect x="408" y="232" width="360" height="80" rx="10" fill="rgba(255,255,255,.06)"/>
+  <rect x="588" y="240" width="1" height="64" fill="rgba(255,255,255,.07)"/>
+  <rect x="420" y="272" width="336" height="1" fill="rgba(255,255,255,.07)"/>
+
+  <use href="#drop" x="420" y="244" width="16" height="16" fill="#4CB8E8"/>
+  <text x="444" y="257" class="b">水</text><text x="464" y="257" class="c">默认 13 人</text>
+  <use href="#chev" x="566" y="245" width="14" height="14" fill="rgba(247,240,228,.5)"/>
+  <use href="#bolt" x="600" y="244" width="16" height="16" fill="#B07CE8"/>
+  <text x="624" y="257" class="b">雷</text><text x="644" y="257" class="c">默认 9 人</text>
+  <use href="#chev" x="746" y="245" width="14" height="14" fill="rgba(247,240,228,.5)"/>
+  <use href="#air" x="420" y="284" width="16" height="16" fill="#5CD6B0"/>
+  <text x="444" y="297" class="b">风</text><text x="464" y="297" class="c">3 人</text>
+  <use href="#chev" x="566" y="285" width="14" height="14" fill="rgba(247,240,228,.5)"/>
+  <use href="#fire" x="600" y="284" width="16" height="16" fill="rgba(232,100,76,.45)"/>
+  <text x="624" y="297" class="b dis">火</text><text x="644" y="297" class="c dis">已关闭</text>
+  <use href="#chev" x="746" y="285" width="14" height="14" fill="rgba(247,240,228,.5)"/>
+</svg>

@@ -1,6 +1,6 @@
 package com.bettergi.pocket.pathing.settings
 
-/** 下拉框使用独立草稿；搜索与排序不丢选择，确认前不修改已保存设置。 */
+/** 维护候选的顺序和去重；旧下拉框曾使用独立草稿，新页面在每次编辑后立即保存。 */
 class OrderedAvatarSelection(initial: List<String>) {
     private val selected = initial.distinct().toMutableList()
     val values: List<String> get() = selected.toList()

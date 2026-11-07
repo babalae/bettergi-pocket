@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="360" viewBox="0 0 800 360">
+  <defs>
+    <style>
+      text{font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif}
+      .h{font-size:15px;font-weight:700;fill:#F7F0E4}
+      .b{font-size:13px;fill:#F7F0E4}
+      .l{font-size:12px;font-weight:600;fill:#F7F0E4}
+      .n{font-size:12px;fill:#F7F0E4}
+      .c{font-size:11px;fill:rgba(247,240,228,.7)}
+      .sec{font-size:11px;font-weight:700;fill:rgba(247,240,228,.7)}
+      .badge{font-size:10px;font-weight:700;fill:#1C1612}
+      .gold{fill:#C9A36A}.mu{fill:rgba(247,240,228,.7)}
+      .pyro{fill:#E8644C}.hydro{fill:#4CB8E8}.anemo{fill:#5CD6B0}.electro{fill:#B07CE8}.cryo{fill:#9CD8E8}.geo{fill:#E8B84C}.dendro{fill:#8CC84C}
+    </style>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3f63b0"/><stop offset=".6" stop-color="#7aa3dd"/>
+      <stop offset=".6" stop-color="#cddcf1"/><stop offset="1" stop-color="#a9c3e6"/>
+    </linearGradient>
+    <symbol id="close" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
+    <symbol id="back" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></symbol>
+    <symbol id="search" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></symbol>
+    <symbol id="drag" viewBox="0 0 24 24"><path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></symbol>
+    <!-- 角色标签：未选 -->
+    <symbol id="chip" viewBox="0 0 88 32" overflow="visible"><rect x="0" y="0" width="88" height="32" rx="8" fill="rgba(255,255,255,.06)"/></symbol>
+    <symbol id="chipOn" viewBox="0 0 88 32" overflow="visible"><rect x=".75" y=".75" width="86.5" height="30.5" rx="8" fill="rgba(201,163,106,.14)" stroke="#C9A36A" stroke-width="1.5"/></symbol>
+  </defs>
+
+  <rect width="800" height="360" fill="url(#sky)"/>
+  <rect x="20" y="8" width="760" height="344" rx="14" fill="rgba(28,22,18,.97)" stroke="rgba(201,163,106,.4)"/>
+
+  <!-- 标题栏：子页面 -->
+  <use href="#back" x="32" y="20" width="20" height="20" fill="#F7F0E4"/>
+  <text x="60" y="36" class="h">行走位候选</text>
+  <text x="146" y="35" class="c">按顺序选出第一个在队角色</text>
+  <text x="660" y="35" class="l gold" text-anchor="middle">恢复默认</text>
+  <text x="713" y="35" class="l gold" text-anchor="middle">清空</text>
+  <use href="#close" x="746" y="20" width="20" height="20" fill="rgba(247,240,228,.7)"/>
+  <rect x="20" y="52" width="760" height="1" fill="rgba(255,255,255,.08)"/>
+
+  <!-- 左栏：已选，按优先级 -->
+  <text x="32" y="72" class="sec">已选 3 人</text>
+  <text x="256" y="72" class="c" text-anchor="end">拖动排序</text>
+
+  <text x="36" y="105" class="l gold">1</text>
+  <use href="#drag" x="50" y="92" width="16" height="16" fill="rgba(247,240,228,.45)"/>
+  <text x="74" y="105" class="b">迪希雅</text><text x="124" y="105" class="c"><tspan class="pyro">火</tspan> · E 20s</text>
+  <use href="#close" x="240" y="93" width="14" height="14" fill="rgba(247,240,228,.6)"/>
+  <rect x="50" y="120" width="218" height="1" fill="rgba(255,255,255,.07)"/>
+
+  <text x="36" y="145" class="l gold">2</text>
+  <use href="#drag" x="50" y="132" width="16" height="16" fill="rgba(247,240,228,.45)"/>
+  <text x="74" y="145" class="b">七七</text><text x="124" y="145" class="c"><tspan class="cryo">冰</tspan> · E 30s</text>
+  <use href="#close" x="240" y="133" width="14" height="14" fill="rgba(247,240,228,.6)"/>
+  <rect x="50" y="160" width="218" height="1" fill="rgba(255,255,255,.07)"/>
+
+  <text x="36" y="185" class="l gold">3</text>
+  <use href="#drag" x="50" y="172" width="16" height="16" fill="rgba(247,240,228,.45)"/>
+  <text x="74" y="185" class="b">钟离</text><text x="124" y="185" class="c"><tspan class="geo">岩</tspan> · E 4s / 长按 12s</text>
+  <use href="#close" x="240" y="173" width="14" height="14" fill="rgba(247,240,228,.6)"/>
+
+  <rect x="268" y="53" width="1" height="298" fill="rgba(255,255,255,.08)"/>
+
+  <!-- 右栏工具行：搜索 + 元素筛选 -->
+  <rect x="280" y="58" width="208" height="28" rx="8" fill="rgba(255,255,255,.08)"/>
+  <use href="#search" x="288" y="64" width="16" height="16" fill="rgba(247,240,228,.6)"/>
+  <text x="310" y="76" class="n mu">搜索中文名、英文名或别名</text>
+  <rect x="498" y="60" width="36" height="24" rx="6" fill="rgba(201,163,106,.22)" stroke="rgba(201,163,106,.6)"/>
+  <text x="516" y="76" class="l gold" text-anchor="middle">全部</text>
+  <g class="l" text-anchor="middle">
+    <rect x="538" y="60" width="28" height="24" rx="6" fill="rgba(255,255,255,.06)"/><text x="552" y="76" class="hydro">水</text>
+    <rect x="570" y="60" width="28" height="24" rx="6" fill="rgba(255,255,255,.06)"/><text x="584" y="76" class="pyro">火</text>
+    <rect x="602" y="60" width="28" height="24" rx="6" fill="rgba(255,255,255,.06)"/><text x="616" y="76" class="electro">雷</text>
+    <rect x="634" y="60" width="28" height="24" rx="6" fill="rgba(255,255,255,.06)"/><text x="648" y="76" class="anemo">风</text>
+    <rect x="666" y="60" width="28" height="24" rx="6" fill="rgba(255,255,255,.06)"/><text x="680" y="76" class="cryo">冰</text>
+    <rect x="698" y="60" width="28" height="24" rx="6" fill="rgba(255,255,255,.06)"/><text x="712" y="76" class="geo">岩</text>
+    <rect x="730" y="60" width="28" height="24" rx="6" fill="rgba(255,255,255,.06)"/><text x="744" y="76" class="dendro">草</text>
+  </g>
+
+  <!-- 角色网格：5 列，88×32，间距 8 -->
+  <g>
+    <!-- 第 1 行：火 -->
+    <use href="#chipOn" x="280" y="96" width="88" height="32"/><circle cx="292" cy="112" r="3" class="pyro"/><text x="302" y="116" class="n">迪希雅</text>
+    <circle cx="356" cy="112" r="7" fill="#C9A36A"/><text x="356" y="115.5" class="badge" text-anchor="middle">1</text>
+    <use href="#chip" x="376" y="96" width="88" height="32"/><circle cx="388" cy="112" r="3" class="pyro"/><text x="398" y="116" class="n">胡桃</text>
+    <use href="#chip" x="472" y="96" width="88" height="32"/><circle cx="484" cy="112" r="3" class="pyro"/><text x="494" y="116" class="n">班尼特</text>
+    <use href="#chip" x="568" y="96" width="88" height="32"/><circle cx="580" cy="112" r="3" class="pyro"/><text x="590" y="116" class="n">香菱</text>
+    <use href="#chip" x="664" y="96" width="88" height="32"/><circle cx="676" cy="112" r="3" class="pyro"/><text x="686" y="116" class="n">玛薇卡</text>
+    <!-- 第 2 行：冰 -->
+    <use href="#chipOn" x="280" y="136" width="88" height="32"/><circle cx="292" cy="152" r="3" class="cryo"/><text x="302" y="156" class="n">七七</text>
+    <circle cx="356" cy="152" r="7" fill="#C9A36A"/><text x="356" y="155.5" class="badge" text-anchor="middle">2</text>
+    <use href="#chip" x="376" y="136" width="88" height="32"/><circle cx="388" cy="152" r="3" class="cryo"/><text x="398" y="156" class="n">莱依拉</text>
+    <use href="#chip" x="472" y="136" width="88" height="32"/><circle cx="484" cy="152" r="3" class="cryo"/><text x="494" y="156" class="n">茜特菈莉</text>
+    <use href="#chip" x="568" y="136" width="88" height="32"/><circle cx="580" cy="152" r="3" class="cryo"/><text x="590" y="156" class="n">神里绫华</text>
+    <use href="#chip" x="664" y="136" width="88" height="32"/><circle cx="676" cy="152" r="3" class="cryo"/><text x="686" y="156" class="n">甘雨</text>
+    <!-- 第 3 行：岩 -->
+    <use href="#chipOn" x="280" y="176" width="88" height="32"/><circle cx="292" cy="192" r="3" class="geo"/><text x="302" y="196" class="n">钟离</text>
+    <circle cx="356" cy="192" r="7" fill="#C9A36A"/><text x="356" y="195.5" class="badge" text-anchor="middle">3</text>
+    <use href="#chip" x="376" y="176" width="88" height="32"/><circle cx="388" cy="192" r="3" class="geo"/><text x="398" y="196" class="n">阿贝多</text>
+    <use href="#chip" x="472" y="176" width="88" height="32"/><circle cx="484" cy="192" r="3" class="geo"/><text x="494" y="196" class="n">娜维娅</text>
+    <use href="#chip" x="568" y="176" width="88" height="32"/><circle cx="580" cy="192" r="3" class="geo"/><text x="590" y="196" class="n">诺艾尔</text>
+    <use href="#chip" x="664" y="176" width="88" height="32"/><circle cx="676" cy="192" r="3" class="geo"/><text x="686" y="196" class="n">千织</text>
+    <!-- 第 4 行：水 -->
+    <use href="#chip" x="280" y="216" width="88" height="32"/><circle cx="292" cy="232" r="3" class="hydro"/><text x="302" y="236" class="n">芭芭拉</text>
+    <use href="#chip" x="376" y="216" width="88" height="32"/><circle cx="388" cy="232" r="3" class="hydro"/><text x="398" y="236" class="n">那维莱特</text>
+    <use href="#chip" x="472" y="216" width="88" height="32"/><circle cx="484" cy="232" r="3" class="hydro"/><text x="494" y="236" class="n">芙宁娜</text>
+    <use href="#chip" x="568" y="216" width="88" height="32"/><circle cx="580" cy="232" r="3" class="hydro"/><text x="590" y="236" class="n">夜兰</text>
+    <use href="#chip" x="664" y="216" width="88" height="32"/><circle cx="676" cy="232" r="3" class="hydro"/><text x="686" y="236" class="n">行秋</text>
+    <!-- 第 5 行：风 -->
+    <use href="#chip" x="280" y="256" width="88" height="32"/><circle cx="292" cy="272" r="3" class="anemo"/><text x="302" y="276" class="n">枫原万叶</text>
+    <use href="#chip" x="376" y="256" width="88" height="32"/><circle cx="388" cy="272" r="3" class="anemo"/><text x="398" y="276" class="n">温迪</text>
+    <use href="#chip" x="472" y="256" width="88" height="32"/><circle cx="484" cy="272" r="3" class="anemo"/><text x="494" y="276" class="n">琴</text>
+    <use href="#chip" x="568" y="256" width="88" height="32"/><circle cx="580" cy="272" r="3" class="anemo"/><text x="590" y="276" class="n">砂糖</text>
+    <use href="#chip" x="664" y="256" width="88" height="32"/><circle cx="676" cy="272" r="3" class="anemo"/><text x="686" y="276" class="n">恰斯卡</text>
+    <!-- 第 6 行：雷、草 -->
+    <use href="#chip" x="280" y="296" width="88" height="32"/><circle cx="292" cy="312" r="3" class="electro"/><text x="302" y="316" class="n">雷电将军</text>
+    <use href="#chip" x="376" y="296" width="88" height="32"/><circle cx="388" cy="312" r="3" class="electro"/><text x="398" y="316" class="n">八重神子</text>
+    <use href="#chip" x="472" y="296" width="88" height="32"/><circle cx="484" cy="312" r="3" class="electro"/><text x="494" y="316" class="n">菲谢尔</text>
+    <use href="#chip" x="568" y="296" width="88" height="32"/><circle cx="580" cy="312" r="3" class="electro"/><text x="590" y="316" class="n">北斗</text>
+    <use href="#chip" x="664" y="296" width="88" height="32"/><circle cx="676" cy="312" r="3" class="dendro"/><text x="686" y="316" class="n">绮良良</text>
+  </g>
+  <rect x="764" y="100" width="3" height="80" rx="1.5" fill="rgba(247,240,228,.25)"/>
+</svg>

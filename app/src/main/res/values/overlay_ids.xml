@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item type="id" name="pathing_search"/>
+    <item type="id" name="pathing_browser_list"/>
+    <item type="id" name="pathing_tab_routes"/>
+    <item type="id" name="pathing_tab_settings"/>
+    <item type="id" name="pathing_setting_main_avatar"/>
+    <item type="id" name="pathing_setting_guardian_avatar"/>
+    <item type="id" name="pathing_setting_guardian_press"/>
+    <item type="id" name="pathing_window_close"/>
+    <item type="id" name="avatar_select_defaults"/>
+    <item type="id" name="avatar_select_clear"/>
+    <item type="id" name="avatar_select_search"/>
+    <item type="id" name="avatar_select_count"/>
+    <item type="id" name="avatar_option_name"/>
+</resources>

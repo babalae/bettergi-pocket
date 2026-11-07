@@ -11,6 +11,8 @@ import android.widget.Button
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.bettergi.pocket.analytics.BaiduAnalytics
 import com.bettergi.pocket.service.TriggerForegroundService
 
@@ -22,6 +24,7 @@ class MainActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        if (!Settings.canDrawOverlays(this)) setTheme(R.style.Theme_BetterGIPocket_Overlay)
         super.onCreate(savedInstanceState)
         launchReady = true
         BaiduAnalytics.start()
@@ -50,6 +53,11 @@ class MainActivity : AppCompatActivity() {
         if (permissionUiShown) return
         permissionUiShown = true
         setContentView(R.layout.activity_main)
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { view, insets ->
+            val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
+            insets
+        }
         findViewById<Button>(R.id.btn_request_overlay).setOnClickListener {
             startActivity(
                 Intent(

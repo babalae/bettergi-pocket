@@ -110,4 +110,20 @@ class RouteBatchRunnerTest {
     }
 
     private fun source(name: String, json: String) = PathingRouteSource(name) { json }
+
+    @Test
+    fun `progress reports file names and final totals without changing execution order`() {
+        val updates = ArrayList<com.bettergi.pocket.pathing.PathingProgress>()
+        val summary = RouteBatchRunner({}, {}, {}, updates::add).run(listOf(
+            source("目录/不支持.json", unsupported), source("目录/成功.json", supported), source("目录/失败.json", supported),
+        )) { route -> if (updates.last().index == 2) PathingResult(true, null) else PathingResult(false, "失败") }
+        assertEquals(RouteBatchRunner.Summary(1, 1, 1), summary)
+        assertEquals(listOf("不支持", "成功", "失败", ""), updates.map { it.name })
+        assertEquals(listOf(1, 2, 3, 3), updates.map { it.index })
+        assertTrue(updates.last().finished)
+        assertEquals(1, updates.last().completed)
+        assertEquals(1, updates.last().skipped)
+        assertEquals(1, updates.last().failed)
+        assertTrue(updates.all { it.total == 3 && it.startedAtMs == updates.first().startedAtMs })
+    }
 }

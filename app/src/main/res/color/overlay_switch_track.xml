@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="#33F7F0E4" android:state_enabled="false" />
-    <item android:color="@color/overlay_status_on" android:state_checked="true" />
-    <item android:color="#66B8A48A" />
+    <item android:state_checked="true" android:color="@color/pocket_primary"/>
+    <item android:state_checked="false" android:color="@color/pocket_surface_group"/>
 </selector>

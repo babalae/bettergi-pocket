@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="pocket_space_xs">4dp</dimen>
+    <dimen name="pocket_space_s">8dp</dimen>
+    <dimen name="pocket_space_m">12dp</dimen>
+    <dimen name="pocket_space_l">16dp</dimen>
+    <dimen name="pocket_text_start">44dp</dimen>
+    <dimen name="pocket_row">44dp</dimen>
+    <dimen name="pocket_row_two_line">52dp</dimen>
+    <dimen name="pocket_row_dense">40dp</dimen>
+    <dimen name="pocket_top_bar">44dp</dimen>
+    <dimen name="pocket_toolbar">40dp</dimen>
+    <dimen name="pocket_icon_button">32dp</dimen>
+    <dimen name="pocket_control">28dp</dimen>
+</resources>

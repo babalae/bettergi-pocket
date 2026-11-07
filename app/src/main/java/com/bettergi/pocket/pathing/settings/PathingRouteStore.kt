@@ -19,7 +19,8 @@ class PathingRouteStore(context: Context) {
 
     fun label(): String {
         debugRoute?.let { return it.first }
-        if (prefs.contains(KEY_SELECTION)) return "已选 ${selectedPaths().size} 条路线"
+        if (prefs.contains(KEY_SELECTION)) return prefs.getString(KEY_SUMMARY, null)
+            ?: selectedPaths().size.let { if (it == 0) "未选择路线" else "已选 $it 条路线" }
         val path = prefs.getString(KEY_PATH, null) ?: return "未选择路线"
         return prefs.getString(KEY_LABEL, null) ?: path.substringAfterLast('/').removeSuffix(".json")
     }
@@ -35,12 +36,15 @@ class PathingRouteStore(context: Context) {
         }.getOrDefault(emptySet())
     }
 
-    fun select(paths: Collection<String>) {
+    fun hasSelection(): Boolean = debugRoute != null || selectedPaths().isNotEmpty()
+
+    fun select(paths: Collection<String>, summary: String? = null) {
         require(paths.all { it.isNotBlank() && !it.startsWith('/') && ".." !in it.split('/') }) {
             "路线路径不合法"
         }
         debugRoute = null
         prefs.edit().remove(KEY_PATH).remove(KEY_LABEL)
+            .putString(KEY_SUMMARY, summary)
             .putString(KEY_SELECTION, JSONArray(paths.toList()).toString()).apply()
     }
 
@@ -56,7 +60,7 @@ class PathingRouteStore(context: Context) {
         }
         debugRoute = null
         prefs.edit()
-            .remove(KEY_SELECTION)
+            .remove(KEY_SELECTION).remove(KEY_SUMMARY)
             .remove(KEY_URI)
             .remove(KEY_TREE)
             .putString(KEY_PATH, path)
@@ -71,7 +75,7 @@ class PathingRouteStore(context: Context) {
         val catalog = appContext.assets.open(RouteCatalog.INDEX_ASSET)
             .bufferedReader(Charsets.UTF_8).use { RouteCatalog.parse(it.readText()) }
         val routes = catalog.resolve(selection).map { node ->
-            PathingRouteSource(node.relativePath) {
+            PathingRouteSource(node.name) {
                 readAsset(node.relativePath) ?: error("找不到路线：${node.relativePath}")
             }
         }
@@ -93,6 +97,7 @@ class PathingRouteStore(context: Context) {
         private const val PREFS_NAME = "pathing_routes"
         private const val KEY_PATH = "asset_path"
         private const val KEY_SELECTION = "asset_selection"
+        private const val KEY_SUMMARY = "selection_summary"
         private const val KEY_LABEL = "label"
         private const val KEY_URI = "uri"
         private const val KEY_TREE = "tree"

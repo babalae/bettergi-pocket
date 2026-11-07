@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.BetterGIPocket.Overlay" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/pocket_primary</item>
+        <item name="colorOnPrimary">@color/pocket_on_primary</item>
+        <item name="colorSurface">@color/pocket_on_primary</item>
+        <item name="colorOnSurface">@color/pocket_text</item>
+        <item name="android:textColorPrimary">@color/pocket_text</item>
+        <item name="android:colorAccent">@color/pocket_primary</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="switchStyle">@style/Pocket.Switch</item>
+    </style>
+    <style name="Pocket.Text" parent="">
+        <item name="android:textColor">@color/pocket_text</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+    <style name="Pocket.Text.Title" parent="Pocket.Text">
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+    <style name="Pocket.Text.Label" parent="Pocket.Text">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+    <style name="Pocket.Text.Caption" parent="Pocket.Text">
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">@color/pocket_text_secondary</item>
+    </style>
+    <style name="Pocket.IconButton" parent="">
+        <item name="android:layout_width">32dp</item>
+        <item name="android:layout_height">32dp</item>
+        <item name="android:padding">6dp</item>
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+    </style>
+    <style name="Pocket.Switch" parent="Widget.AppCompat.CompoundButton.Switch">
+        <item name="thumbTint">@color/overlay_switch_thumb</item>
+        <item name="trackTint">@color/overlay_switch_track</item>
+        <item name="android:minHeight">28dp</item>
+    </style>
+</resources>

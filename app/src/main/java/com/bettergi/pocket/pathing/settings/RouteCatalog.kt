@@ -20,6 +20,8 @@ class RouteCatalog(val roots: List<Node>) {
         val matchMetadataReadable: Boolean = true,
     ) {
         val routePaths: List<String> = if (file) listOf(relativePath) else children.flatMap { it.routePaths }
+        val displayName: String get() = if (file) name else name.substringBefore('@')
+        val author: String get() = if (file) "" else name.substringAfter('@', "")
 
         fun matchingDescription(default: MapMatchingMethod): String {
             if (!matchMetadataReadable) return "匹配方式读取失败"
@@ -40,6 +42,37 @@ class RouteCatalog(val roots: List<Node>) {
     }
 
     fun node(path: String): Node? = nodes[path]
+
+    /** 按与 resolve 相同的目录顺序压缩队列；完整目录只占一行。 */
+    fun queueEntries(selection: Set<String>): List<Node> {
+        val selected = selection.toHashSet()
+        // 兼容旧的目录选择，同时保持本次遍历与目录节点数成正比。
+        selection.forEach { path -> nodes[path]?.takeIf { !it.file }?.let { selected.addAll(it.routePaths) } }
+        val counts = HashMap<String, Int>()
+        fun count(node: Node): Int {
+            val n = if (node.file) if (node.relativePath in selected) 1 else 0 else node.children.sumOf(::count)
+            counts[node.relativePath] = n
+            return n
+        }
+        roots.forEach(::count)
+        val queue = ArrayList<Node>()
+        fun visit(node: Node) {
+            val n = counts[node.relativePath] ?: 0
+            if (n == 0) return
+            if (n == node.routePaths.size) queue += node else node.children.forEach(::visit)
+        }
+        roots.forEach(::visit)
+        return queue
+    }
+
+    fun selectionSummary(selection: Set<String>): String {
+        if (selection.isEmpty()) return "未选择路线"
+        val queue = queueEntries(selection)
+        if (queue.isEmpty()) return "未选择路线"
+        val count = queue.sumOf { it.routePaths.size }
+        return "已选 $count 条 · ${queue.firstOrNull()?.displayName.orEmpty()}" +
+            if (queue.size > 1) " 等 ${queue.size} 组" else ""
+    }
 
     /** 以目录为单位浏览；搜索也返回目录，方便一次选中整组路线。 */
     fun browse(directory: String, query: String, limit: Int = SEARCH_LIMIT): Listing {

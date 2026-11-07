@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/main" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:background="@color/pocket_on_primary">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center" android:padding="24dp">
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="16dp">
+            <ImageView android:layout_width="80dp" android:layout_height="80dp" android:contentDescription="@string/app_name" android:src="@drawable/ic_overlay_bubble"/>
+            <TextView style="@style/Pocket.Text.Title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="更好的原神"/>
+            <TextView style="@style/Pocket.Text.Caption" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="BetterGI Pocket"/>
+        </LinearLayout>
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1.4" android:orientation="vertical" android:padding="16dp" android:background="@drawable/bg_pocket_group">
+            <TextView style="@style/Pocket.Text.Title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="开启游戏内助手"/>
+            <TextView style="@style/Pocket.Text" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="悬浮窗 · 现在需要"/>
+            <TextView style="@style/Pocket.Text.Caption" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="在游戏中显示助手悬浮球、路线和状态。"/>
+            <TextView style="@style/Pocket.Text" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="屏幕共享 · 开启时请求"/>
+            <TextView style="@style/Pocket.Text.Caption" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="打开「共享屏幕」时请求，用于识别游戏画面。"/>
+            <TextView style="@style/Pocket.Text" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="无障碍 · 使用功能时引导"/>
+            <TextView style="@style/Pocket.Text.Caption" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="自动点击对话和地图追踪需要，用到时再开启。"/>
+            <Button android:id="@+id/btn_request_overlay" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="40dp" android:layout_marginTop="16dp" android:textSize="12sp" android:text="去开启悬浮窗" android:textColor="@color/pocket_on_primary" android:backgroundTint="@color/pocket_primary"/>
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

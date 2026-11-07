@@ -4,16 +4,27 @@
     <color name="white">#FFFFFFFF</color>
 
     <color name="overlay_cream">#F4E6C8</color>
-    <color name="overlay_gold">#C9A36A</color>
-    <color name="overlay_panel">#F21C1612</color>
-    <color name="overlay_panel_stroke">#66C9A36A</color>
-    <color name="overlay_text">#FFF7F0E4</color>
-    <color name="overlay_text_muted">#B3F7F0E4</color>
-    <color name="overlay_row">#26FFFFFF</color>
-    <color name="overlay_row_divider">#1AFFFFFF</color>
     <color name="overlay_status_on">#FF5CBA6A</color>
     <color name="overlay_status_off">#FFB8A48A</color>
     <color name="overlay_status_warn">#FFE8A45A</color>
-    <color name="overlay_log_green">#FF7CFF9A</color>
-    <color name="overlay_bilibili">#FFFB7299</color>
+    <color name="pocket_surface">#F21C1612</color>
+    <color name="pocket_surface_group">#12FFFFFF</color>
+    <color name="pocket_outline">#66C9A36A</color>
+    <color name="pocket_divider">#12FFFFFF</color>
+    <color name="pocket_primary">#C9A36A</color>
+    <color name="pocket_on_primary">#1C1612</color>
+    <color name="pocket_primary_container">#33C9A36A</color>
+    <color name="pocket_text">#F7F0E4</color>
+    <color name="pocket_text_secondary">#B3F7F0E4</color>
+    <color name="pocket_text_disabled">#61F7F0E4</color>
+    <color name="pocket_success">#5CBA6A</color>
+    <color name="pocket_warning">#E8A45A</color>
+    <color name="pocket_error">#E5735F</color>
+    <color name="pocket_pyro">#E8644C</color>
+    <color name="pocket_hydro">#4CB8E8</color>
+    <color name="pocket_anemo">#5CD6B0</color>
+    <color name="pocket_electro">#B07CE8</color>
+    <color name="pocket_cryo">#9CD8E8</color>
+    <color name="pocket_geo">#E8B84C</color>
+    <color name="pocket_dendro">#8CC84C</color>
 </resources>

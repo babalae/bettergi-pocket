@@ -73,14 +73,6 @@
         </activity>
 
         <activity
-            android:name=".pathing.PathingRouteActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:taskAffinity=""
-            android:windowSoftInputMode="adjustPan"
-            android:theme="@style/Theme.BetterGIPocket.Transparent" />
-
-        <activity
             android:name=".capture.CapturePermissionActivity"
             android:exported="false"
             android:excludeFromRecents="true"

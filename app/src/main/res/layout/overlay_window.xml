@@ -1,592 +1,75 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/overlay_root"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content">
-
-    <FrameLayout
-        android:id="@+id/overlay_bubble"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:contentDescription="更好的原神悬浮球">
-
-        <View
-            android:layout_width="46dp"
-            android:layout_height="46dp"
-            android:layout_gravity="center"
-            android:background="@drawable/bg_overlay_bubble_shadow"
-            android:translationY="2dp" />
-
-        <ImageView
-            android:id="@+id/overlay_bubble_icon"
-            android:layout_width="49dp"
-            android:layout_height="49dp"
-            android:layout_gravity="center"
-            android:importantForAccessibility="no"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_overlay_bubble" />
-
-        <View
-            android:id="@+id/overlay_status_dot"
-            android:layout_width="9dp"
-            android:layout_height="9dp"
-            android:layout_gravity="end|bottom"
-            android:layout_marginEnd="2dp"
-            android:layout_marginBottom="2dp"
-            android:background="@drawable/bg_overlay_status_dot" />
-
-        <ImageView
-            android:id="@+id/overlay_chat_badge"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:layout_gravity="end|top"
-            android:layout_marginTop="1dp"
-            android:layout_marginEnd="1dp"
-            android:background="@drawable/bg_overlay_chat_badge"
-            android:contentDescription="正在对话"
-            android:padding="3dp"
-            android:src="@drawable/ic_overlay_chat"
-            android:visibility="gone" />
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:id="@+id/overlay_root" android:layout_width="wrap_content" android:layout_height="wrap_content">
+    <FrameLayout android:id="@+id/overlay_bubble" android:layout_width="48dp" android:layout_height="48dp" android:contentDescription="更好的原神悬浮球">
+        <View android:layout_width="46dp" android:layout_height="46dp" android:layout_gravity="center" android:background="@drawable/bg_overlay_bubble_shadow" android:translationY="2dp"/>
+        <ImageView android:id="@+id/overlay_bubble_icon" android:layout_width="49dp" android:layout_height="49dp" android:layout_gravity="center" android:importantForAccessibility="no" android:scaleType="fitCenter" android:src="@drawable/ic_overlay_bubble"/>
+        <View android:id="@+id/overlay_status_dot" android:layout_width="9dp" android:layout_height="9dp" android:layout_gravity="end|bottom" android:layout_marginEnd="2dp" android:layout_marginBottom="2dp" android:background="@drawable/bg_overlay_status_dot"/>
+        <ImageView android:id="@+id/overlay_chat_badge" android:layout_width="16dp" android:layout_height="16dp" android:layout_gravity="end|top" android:layout_marginTop="1dp" android:layout_marginEnd="1dp" android:background="@drawable/bg_overlay_chat_badge" android:contentDescription="正在对话" android:padding="3dp" android:src="@drawable/ic_overlay_chat" android:visibility="gone"/>
     </FrameLayout>
-
-    <LinearLayout
-        android:id="@+id/overlay_panel"
-        android:layout_width="228dp"
-        android:layout_height="wrap_content"
-        android:background="@drawable/bg_overlay_panel"
-        android:elevation="10dp"
-        android:orientation="vertical"
-        android:padding="8dp"
-        android:visibility="gone">
-
-        <LinearLayout
-            android:id="@+id/overlay_header"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="2dp"
-            android:paddingEnd="0dp">
-
-            <ImageView
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:importantForAccessibility="no"
-                android:scaleType="centerInside"
-                android:src="@drawable/ic_overlay_bubble" />
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="更好的原神"
-                    android:textColor="@color/overlay_text"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/overlay_status_text"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="1dp"
-                    android:background="@drawable/bg_overlay_chip"
-                    android:paddingStart="6dp"
-                    android:paddingTop="0dp"
-                    android:paddingEnd="6dp"
-                    android:paddingBottom="0dp"
-                    android:text="未启动"
-                    android:textColor="@color/overlay_text_muted"
-                    android:textSize="10sp" />
+    <LinearLayout android:id="@+id/overlay_panel" android:layout_width="256dp" android:layout_height="wrap_content" android:orientation="vertical" android:padding="8dp" android:background="@drawable/bg_pocket_window" android:visibility="gone">
+        <LinearLayout android:id="@+id/overlay_header" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="40dp" android:orientation="horizontal" android:gravity="center_vertical">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_overlay_bubble" android:importantForAccessibility="no"/>
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:orientation="vertical">
+                <TextView style="@style/Pocket.Text.Title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="更好的原神"/>
+                <TextView android:id="@+id/overlay_status_text" style="@style/Pocket.Text.Caption" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="未共享" android:background="@drawable/bg_pocket_chip" android:paddingHorizontal="6dp"/>
             </LinearLayout>
-
-            <ImageButton
-                android:id="@+id/overlay_bilibili"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
-                android:layout_marginEnd="4dp"
-                android:background="@drawable/bg_overlay_close"
-                android:contentDescription="B站主页"
-                android:padding="4dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/ic_overlay_bilibili"
-                app:tint="@null" />
-
-            <ImageButton
-                android:id="@+id/overlay_log_toggle"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
-                android:layout_marginEnd="4dp"
-                android:background="@drawable/bg_overlay_close"
-                android:contentDescription="识别日志"
-                android:padding="5dp"
-                android:src="@drawable/ic_overlay_log" />
-
-            <ImageButton
-                android:id="@+id/overlay_collapse"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
-                android:background="@drawable/bg_overlay_close"
-                android:contentDescription="收起"
-                android:padding="5dp"
-                android:src="@drawable/ic_overlay_close" />
+            <ImageButton style="@style/Pocket.IconButton" android:id="@+id/overlay_log_toggle" android:src="@drawable/ic_ui_article" android:contentDescription="显示或隐藏状态条" app:tint="@color/pocket_text_secondary"/>
+            <ImageButton style="@style/Pocket.IconButton" android:id="@+id/overlay_collapse" android:src="@drawable/ic_ui_close" android:contentDescription="收起面板" app:tint="@color/pocket_text_secondary"/>
         </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/overlay_row_enabled"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_overlay_row"
-            android:gravity="center_vertical"
-            android:minHeight="40dp"
-            android:orientation="horizontal"
-            android:paddingStart="10dp"
-            android:paddingTop="4dp"
-            android:paddingEnd="4dp"
-            android:paddingBottom="4dp">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="共享屏幕"
-                    android:textColor="@color/overlay_text"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="1dp"
-                    android:text="关闭后立即停止共享"
-                    android:textColor="@color/overlay_text_muted"
-                    android:textSize="10sp" />
-            </LinearLayout>
-
-            <androidx.appcompat.widget.SwitchCompat
-                android:id="@+id/overlay_switch_enabled"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:showText="false"
-                app:thumbTint="@color/overlay_switch_thumb"
-                app:thumbTintMode="src_in"
-                app:trackTint="@color/overlay_switch_track"
-                app:trackTintMode="src_in" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/overlay_group_auto_skip"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:background="@drawable/bg_overlay_row"
-            android:orientation="vertical">
-
-            <LinearLayout
-                android:id="@+id/overlay_row_auto_skip"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="8dp"
-                android:paddingEnd="4dp">
-
-                <ImageView
-                    android:id="@+id/overlay_auto_skip_chevron"
-                    android:layout_width="14dp"
-                    android:layout_height="14dp"
-                    android:importantForAccessibility="no"
-                    android:src="@drawable/ic_overlay_chevron" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="自动对话"
-                        android:textColor="@color/overlay_text"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="1dp"
-                        android:text="自动点击对话选项"
-                        android:textColor="@color/overlay_text_muted"
-                        android:textSize="10sp" />
+        <ScrollView android:id="@+id/overlay_panel_scroll" android:layout_width="match_parent" android:layout_height="wrap_content" android:fillViewport="false" android:scrollbars="none">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                <LinearLayout android:id="@+id/overlay_warning" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="36dp" android:orientation="horizontal" android:gravity="center_vertical" android:background="@drawable/bg_pocket_warning" android:visibility="gone">
+                    <TextView android:id="@+id/overlay_warning_text" style="@style/Pocket.Text.Caption" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="@color/pocket_warning"/>
+                    <TextView android:id="@+id/overlay_warning_action" style="@style/Pocket.Text.Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minHeight="28dp" android:gravity="center" android:paddingHorizontal="6dp" android:text="去开启" android:background="@drawable/bg_pocket_chip" android:textColor="@color/pocket_primary"/>
                 </LinearLayout>
-
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/overlay_switch_auto_skip"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:showText="false"
-                    app:thumbTint="@color/overlay_switch_thumb"
-                    app:thumbTintMode="src_in"
-                    app:trackTint="@color/overlay_switch_track"
-                    app:trackTintMode="src_in" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/overlay_auto_skip_extras"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:visibility="gone">
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="10dp"
-                android:layout_marginEnd="10dp"
-                android:background="@color/overlay_row_divider" />
-
-            <LinearLayout
-                android:id="@+id/overlay_row_quick_skip"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:minHeight="36dp"
-                android:orientation="horizontal"
-                android:paddingStart="10dp"
-                android:paddingTop="2dp"
-                android:paddingEnd="4dp"
-                android:paddingBottom="4dp">
-
-                <View
-                    android:layout_width="2dp"
-                    android:layout_height="match_parent"
-                    android:layout_marginTop="6dp"
-                    android:layout_marginBottom="6dp"
-                    android:background="@color/overlay_gold" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="快速点击跳过"
-                        android:textColor="@color/overlay_text"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="1dp"
-                        android:text="对话中点击屏幕下方继续"
-                        android:textColor="@color/overlay_text_muted"
-                        android:textSize="10sp" />
-                </LinearLayout>
-
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/overlay_switch_quick_skip"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:showText="false"
-                    app:thumbTint="@color/overlay_switch_thumb"
-                    app:thumbTintMode="src_in"
-                    app:trackTint="@color/overlay_switch_track"
-                    app:trackTintMode="src_in" />
-            </LinearLayout>
-            </LinearLayout>
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/overlay_row_auto_pick"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:background="@drawable/bg_overlay_row"
-            android:gravity="center_vertical"
-            android:minHeight="40dp"
-            android:orientation="horizontal"
-            android:paddingStart="10dp"
-            android:paddingTop="4dp"
-            android:paddingEnd="4dp"
-            android:paddingBottom="4dp"
-            android:visibility="gone">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="自动拾取"
-                    android:textColor="@color/overlay_text"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="1dp"
-                    android:text="每 800ms 点击屏幕下方"
-                    android:textColor="@color/overlay_text_muted"
-                    android:textSize="10sp" />
-            </LinearLayout>
-
-            <androidx.appcompat.widget.SwitchCompat
-                android:id="@+id/overlay_switch_auto_pick"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:showText="false"
-                app:thumbTint="@color/overlay_switch_thumb"
-                app:thumbTintMode="src_in"
-                app:trackTint="@color/overlay_switch_track"
-                app:trackTintMode="src_in" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/overlay_group_pathing"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:background="@drawable/bg_overlay_row"
-            android:orientation="vertical">
-
-            <LinearLayout
-                android:id="@+id/overlay_row_pathing"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="12dp"
-                android:paddingEnd="8dp">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="地图追踪"
-                        android:textColor="@color/overlay_text"
-                        android:textSize="13sp" />
-                    <TextView
-                        android:id="@+id/overlay_pathing_status"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:ellipsize="end"
-                        android:maxLines="1"
-                        android:text="选择路线与执行设置"
-                        android:textColor="@color/overlay_text_muted"
-                        android:textSize="10sp" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/overlay_pathing_start"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginStart="8dp"
-                    android:background="@drawable/bg_overlay_launch"
-                    android:gravity="center"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:text="开始"
-                    android:textColor="@color/overlay_gold"
-                    android:textSize="12sp" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/overlay_group_launch"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:background="@drawable/bg_overlay_row"
-            android:orientation="vertical">
-
-            <LinearLayout
-                android:id="@+id/overlay_row_launch"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="8dp"
-                android:paddingEnd="4dp">
-
-                <ImageView
-                    android:id="@+id/overlay_launch_chevron"
-                    android:layout_width="14dp"
-                    android:layout_height="14dp"
-                    android:importantForAccessibility="no"
-                    android:src="@drawable/ic_overlay_chevron" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="启动原神"
-                        android:textColor="@color/overlay_text"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:id="@+id/overlay_launch_subtitle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="1dp"
-                        android:text="打开已安装的原神"
-                        android:textColor="@color/overlay_text_muted"
-                        android:textSize="10sp" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/overlay_launch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="32dp"
-                    android:background="@drawable/bg_overlay_launch"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center"
-                    android:orientation="horizontal"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp">
-
-                    <ImageView
-                        android:layout_width="12dp"
-                        android:layout_height="12dp"
-                        android:importantForAccessibility="no"
-                        android:src="@drawable/ic_overlay_launch" />
-
-                    <TextView
-                        android:id="@+id/overlay_launch_text"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="4dp"
-                        android:text="启动"
-                        android:textColor="@color/overlay_gold"
-                        android:textSize="11sp" />
-                </LinearLayout>
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/overlay_launch_extras"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:visibility="gone">
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginStart="10dp"
-                    android:layout_marginEnd="10dp"
-                    android:background="@color/overlay_row_divider" />
-
-                <LinearLayout
-                    android:id="@+id/overlay_row_auto_launch"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:minHeight="36dp"
-                    android:orientation="horizontal"
-                    android:paddingStart="10dp"
-                    android:paddingTop="2dp"
-                    android:paddingEnd="4dp"
-                    android:paddingBottom="4dp">
-
-                    <View
-                        android:layout_width="2dp"
-                        android:layout_height="match_parent"
-                        android:layout_marginTop="6dp"
-                        android:layout_marginBottom="6dp"
-                        android:background="@color/overlay_gold" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="无原神时自动启动"
-                            android:textColor="@color/overlay_text"
-                            android:textSize="12sp" />
-
-                        <TextView
-                            android:id="@+id/overlay_auto_launch_hint"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:text="启动助手时若未检测到原神则打开一次"
-                            android:textColor="@color/overlay_text_muted"
-                            android:textSize="10sp" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="vertical" android:background="@drawable/bg_pocket_group">
+                    <LinearLayout android:id="@+id/overlay_row_enabled" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="44dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="12dp" android:paddingVertical="4dp">
+                        <ImageView android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="12dp" android:src="@drawable/ic_ui_screen_share" app:tint="@color/pocket_text_secondary" android:importantForAccessibility="no"/>
+                        <TextView style="@style/Pocket.Text" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="共享屏幕"/>
+                        <androidx.appcompat.widget.SwitchCompat android:id="@+id/overlay_switch_enabled" android:layout_width="wrap_content" android:layout_height="wrap_content" android:contentDescription="切换功能" app:thumbTint="@color/overlay_switch_thumb" app:trackTint="@color/overlay_switch_track"/>
                     </LinearLayout>
-
-                    <androidx.appcompat.widget.SwitchCompat
-                        android:id="@+id/overlay_switch_auto_launch"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:showText="false"
-                        app:thumbTint="@color/overlay_switch_thumb"
-                        app:thumbTintMode="src_in"
-                        app:trackTint="@color/overlay_switch_track"
-                        app:trackTintMode="src_in" />
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginStart="44dp" android:background="@color/pocket_divider"/>
+                    <LinearLayout android:id="@+id/overlay_row_auto_skip" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="44dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="12dp" android:paddingVertical="4dp">
+                        <ImageView android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="12dp" android:src="@drawable/ic_ui_forum" app:tint="@color/pocket_text_secondary" android:importantForAccessibility="no"/>
+                        <TextView style="@style/Pocket.Text" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="自动对话"/>
+                        <TextView android:id="@+id/overlay_quick_skip_chip" style="@style/Pocket.Text.Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minHeight="28dp" android:gravity="center" android:paddingHorizontal="6dp" android:text="快跳" android:background="@drawable/bg_pocket_chip" android:textColor="@color/pocket_primary"/>
+                        <androidx.appcompat.widget.SwitchCompat android:id="@+id/overlay_switch_auto_skip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:contentDescription="切换功能" app:thumbTint="@color/overlay_switch_thumb" app:trackTint="@color/overlay_switch_track"/>
+                    </LinearLayout>
+                    <TextView android:id="@+id/overlay_auto_skip_hint" style="@style/Pocket.Text.Caption" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingStart="44dp" android:paddingBottom="4dp" android:visibility="gone" android:textColor="@color/pocket_warning"/>
+                    <LinearLayout android:id="@+id/overlay_row_auto_pick" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="44dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="12dp" android:paddingVertical="4dp" android:visibility="gone">
+                        <ImageView android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="12dp" android:src="@drawable/ic_ui_add" app:tint="@color/pocket_text_secondary" android:importantForAccessibility="no"/>
+                        <TextView style="@style/Pocket.Text" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="自动拾取"/>
+                        <androidx.appcompat.widget.SwitchCompat android:id="@+id/overlay_switch_auto_pick" android:layout_width="wrap_content" android:layout_height="wrap_content" android:contentDescription="切换功能" app:thumbTint="@color/overlay_switch_thumb" app:trackTint="@color/overlay_switch_track"/>
+                    </LinearLayout>
+                </LinearLayout>
+                <LinearLayout android:id="@+id/overlay_group_pathing" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="vertical" android:background="@drawable/bg_pocket_group">
+                    <LinearLayout android:id="@+id/overlay_row_pathing" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="44dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="12dp" android:paddingVertical="4dp">
+                        <ImageView android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="12dp" android:src="@drawable/ic_ui_map" app:tint="@color/pocket_text_secondary" android:importantForAccessibility="no"/>
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                            <TextView style="@style/Pocket.Text" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="地图追踪"/>
+                            <TextView android:id="@+id/overlay_pathing_status" style="@style/Pocket.Text.Caption" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="未选择路线" android:maxLines="1" android:ellipsize="end"/>
+                            <ProgressBar android:id="@+id/overlay_pathing_progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="3dp" android:layout_marginTop="4dp" android:progressTint="@color/pocket_primary" android:visibility="gone"/>
+                        </LinearLayout>
+                        <ImageButton style="@style/Pocket.IconButton" android:id="@+id/overlay_pathing_start" android:src="@drawable/ic_ui_play_arrow" android:contentDescription="执行上次选择的路线" app:tint="@color/pocket_text_secondary"/>
+                    </LinearLayout>
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="vertical" android:background="@drawable/bg_pocket_group">
+                    <LinearLayout android:id="@+id/overlay_row_launch" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="44dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="12dp" android:paddingVertical="4dp">
+                        <ImageView android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="12dp" android:src="@drawable/ic_ui_open_in_new" app:tint="@color/pocket_text_secondary" android:importantForAccessibility="no"/>
+                        <TextView style="@style/Pocket.Text" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:maxLines="1" android:text="启动原神"/>
+                        <TextView android:id="@+id/overlay_auto_launch_chip" style="@style/Pocket.Text.Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:minHeight="28dp" android:gravity="center" android:paddingHorizontal="4dp" android:text="自动" android:background="@drawable/bg_pocket_chip" android:textColor="@color/pocket_primary"/>
+                        <TextView android:id="@+id/overlay_launch" style="@style/Pocket.Text.Label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minWidth="48dp" android:minHeight="28dp" android:gravity="center" android:paddingHorizontal="8dp" android:text="启动" android:background="@drawable/bg_pocket_chip" android:textColor="@color/pocket_primary"/>
+                    </LinearLayout>
+                    <TextView android:id="@+id/overlay_launch_subtitle" style="@style/Pocket.Text.Caption" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingStart="44dp" android:paddingBottom="4dp" android:visibility="gone" android:textColor="@color/pocket_warning"/>
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="32dp" android:layout_marginTop="4dp" android:orientation="horizontal" android:gravity="center_vertical">
+                    <FrameLayout android:id="@+id/overlay_bilibili" android:layout_width="32dp" android:layout_height="32dp" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="B站主页" android:clickable="true" android:focusable="true">
+                        <ImageView android:layout_width="20dp" android:layout_height="20dp" android:layout_gravity="center" android:src="@drawable/ic_overlay_bilibili" android:scaleType="fitCenter" android:importantForAccessibility="no"/>
+                    </FrameLayout>
+                    <TextView style="@style/Pocket.Text.Caption" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="v1.0"/>
+                    <ImageButton style="@style/Pocket.IconButton" android:id="@+id/overlay_exit" android:src="@drawable/ic_ui_power_settings_new" android:contentDescription="退出助手" app:tint="@color/pocket_text_secondary"/>
                 </LinearLayout>
             </LinearLayout>
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/overlay_exit"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:background="@drawable/bg_overlay_exit"
-            android:gravity="center"
-            android:minHeight="32dp"
-            android:orientation="horizontal"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp">
-
-            <ImageView
-                android:layout_width="14dp"
-                android:layout_height="14dp"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_overlay_exit" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:text="退出"
-                android:textColor="@color/overlay_text_muted"
-                android:textSize="12sp" />
-        </LinearLayout>
+        </ScrollView>
     </LinearLayout>
 </FrameLayout>
