@@ -11,6 +11,17 @@ val localConfig = Properties().apply {
     if (configFile.exists()) configFile.reader(Charsets.UTF_8).use { load(it) }
 }
 
+// 与发布工作流共用版本配置，保证 APK 版本和仓库中的版本一致。
+val appVersion = Properties().apply {
+    rootProject.file("version.properties").reader(Charsets.UTF_8).use { load(it) }
+}
+val appVersionName = requireNotNull(appVersion.getProperty("VERSION_NAME")).also {
+    require(it.isNotBlank()) { "VERSION_NAME 不能为空" }
+}
+val appVersionCode = requireNotNull(appVersion.getProperty("VERSION_CODE")).toInt().also {
+    require(it in 1..2100000000) { "VERSION_CODE 超出 Android 版本号范围" }
+}
+
 fun analyticsProperty(name: String, fallback: String = ""): String =
     providers.gradleProperty(name).orNull
         ?: localConfig.getProperty(name)
@@ -71,8 +82,8 @@ android {
         applicationId = "com.bettergi.pocket"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
         buildConfigField("boolean", "PATHING_ENABLED", includePathing.toString())
         ndk { abiFilters += "arm64-v8a" }
 

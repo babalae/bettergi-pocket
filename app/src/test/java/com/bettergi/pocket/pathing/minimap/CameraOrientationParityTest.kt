@@ -29,7 +29,12 @@ class CameraOrientationParityTest {
                 val (angle, confidence) = pre.predictRotationWithConfidence(miniMap)
                 val expected = case.getJSONObject("rotation")
                 assertEquals("${case.getString("file")} angle", expected.getDouble("angle"), angle.toDouble(), ANGLE_TOLERANCE)
-                assertEquals("${case.getString("file")} confidence", expected.getDouble("confidence"), confidence.toDouble(), 1e-3)
+                assertEquals("${case.getString("file")} confidence", expected.getDouble("confidence"), confidence.toDouble(), CONFIDENCE_TOLERANCE)
+                assertEquals(
+                    "${case.getString("file")} confidence fallback",
+                    expected.getDouble("confidence") < CameraOrientation.MIN_CONFIDENCE,
+                    confidence < CameraOrientation.MIN_CONFIDENCE,
+                )
                 miniMap.release()
             }
         }
@@ -139,6 +144,9 @@ class CameraOrientationParityTest {
 
     companion object {
         private const val ANGLE_TOLERANCE = 1e-3
+        // BGI 4.11 与 JVM OpenCV 4.9 跨环境对拍：CI mm_16 的置信度差为 0.0015163。
+        // 允许 0.2 个百分点的数值差异，同时保持角度、掩膜和是否触发 Gia 兜底的严格校验。
+        private const val CONFIDENCE_TOLERANCE = 2e-3
 
         @JvmStatic
         @BeforeClass

@@ -10,39 +10,27 @@
 - **地图追踪**：点击开始，在悬浮窗口中筛选、多选路线或整个目录，依次执行传送、转向、地面行走和拾取；不支持的路线记日志后跳过，可单独开启坐标显示
 - **启动原神**：打开已安装的客户端，可选在未检测到游戏时自动启动一次
 
-地图追踪设置支持通过可搜索的下拉多选框配置行走位、生存位短／长战技及水、雷、风、火元素采集的候选角色；可调整优先级、清空和恢复默认，按已选顺序匹配当前队伍。队伍通过 ncnn 头像模型识别，要求单人四人队伍。设置说明、标定范围和验证记录见 [队伍识别与元素采集](docs/队伍识别与元素采集.md)。
+地图追踪设置支持通过可搜索的下拉多选框配置行走位、生存位短／长战技及水、雷、风、火元素采集的候选角色；可调整优先级、清空和恢复默认，按已选顺序匹配当前队伍。队伍通过角色头像识别，要求单人四人队伍。设置说明、标定范围和验证记录见 [队伍识别与元素采集](docs/队伍识别与元素采集.md)。
 
 支持国服官服、Bilibili 服、国际服、云原神及部分渠道服。
 
-开发时的 Windows 真机打包、安装、启动、截图及无障碍手势验证，见 [真机自动化说明](tools/ANDROID-AUTOMATION.md)。
-
-地图追踪当前标定来自 3040×1904 的安卓平板，地面采集已实测。其他分辨率、飞行和攀爬仍需验证；适配方法与已知限制见 [真机调试经验](docs/地图追踪-真机调试经验.md)。构建所需地图和路线资源通过 `tools/sync-pathing-assets.ps1` 同步，不存入 Git。 挖孔屏及游戏「UI 边界偏移」的适配机制和验证范围见 [多分辨率与 HUD 自动锚定](docs/多分辨率与HUD自动锚定.md)。
+地图追踪当前标定来自 3040×1904 的安卓平板，地面采集已实测。其他分辨率、飞行和攀爬仍需验证；适配方法与已知限制见 [真机调试经验](docs/地图追踪-真机调试经验.md)。挖孔屏及游戏「UI 边界偏移」的适配机制和验证范围见 [多分辨率与 HUD 自动锚定](docs/多分辨率与HUD自动锚定.md)。
 
 ## 使用说明
 
 ### 两种 arm64 安装包
 
-- **完整版（full）**：包含地图追踪、NCNN 头像识别和地图资源；路线只保留「地方特产」，首次进入默认打开该目录，旧目录失效时也会回到特产目录。
-- **精简版（lite）**：隐藏地图追踪入口，不初始化追踪功能，不构建或打包 NCNN，也不打包地图、路线、传送点、追踪模板及头像模型。自动对话等功能保留。
+- **完整版（full）**：支持自动剧情和地图追踪，内置「地方特产」路线。
+- **剧情版（story）**：支持自动剧情，以及屏幕共享、悬浮窗、启动游戏等配套功能；不含地图追踪。
 
-本地构建仅输出 `arm64-v8a`：
+从 [Releases](https://github.com/babalae/bettergi-pocket/releases) 下载所需版本的 APK：
 
-```powershell
-# 完整版先同步地图资源及地方特产路线
-./tools/sync-pathing-assets.ps1
-./gradlew.bat :app:assembleRelease -PincludePathing=true
+| 安装包 | 功能 |
+| --- | --- |
+| `bettergi-pocket-arm64-story.apk` | 自动剧情 |
+| `bettergi-pocket-arm64-full.apk` | 自动剧情 + 地图追踪 |
 
-# 精简版无需准备任何地图资源
-./gradlew.bat :app:assembleRelease -PincludePathing=false
-```
-
-`includePathing` 默认为 `true`。两次构建使用相同的输出位置 `app/build/outputs/apk/release/app-release-unsigned.apk`，需要保留两个包时请先复制第一次的输出；本地可改用 `assembleDebug` 获得默认调试签名 APK。
-
-GitHub 仓库的 **Actions → Build arm64 APKs (full + lite) → Run workflow** 手动触发一次，会构建、验证并上传两个签名 Release APK 和 SHA-256 清单；没有 push 或 PR 自动触发。产物在该次运行的 Artifacts 中下载。
-
-地图资源不需要提交到 Git：工作流自动下载并校验 BetterGI 使用的 `BetterGI.Assets.Map 1.0.26` NuGet 包，从固定 BetterGI 提交获取 `tp.json`，再从 [bettergi-scripts-list 的 release 分支](https://github.com/babalae/bettergi-scripts-list/tree/release/repo/pathing/地方特产)仅拉取特产路线。运行摘要记录实际路线提交号。地图准备逻辑见 `tools/prepare-ci-pathing-assets.ps1`，最终 APK 检查见 `tools/verify-apk.ps1`。
-
-正式发布可在仓库 **Settings → Secrets and variables → Actions** 配置 `ANDROID_KEYSTORE_BASE64`（签名文件的 Base64）、`ANDROID_STORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD` 四项 Secrets。未配置时会生成同次运行共用的临时测试密钥，两个包可以安装，但不同运行之间需要卸载后重装；使用固定发布密钥可持续覆盖升级。两个版本使用同一应用 ID，可相互覆盖切换。可选配置 `BAIDU_MTJ_APP_KEY`，为空时不启动统计。
+### 首次使用
 
 1. 安装并打开应用，按提示开启**悬浮窗**权限
 2. 先在应用设置中找到 更好的原神 进行单次授权
@@ -120,3 +108,5 @@ GitHub 仓库的 **Actions → Build arm64 APKs (full + lite) → Run workflow**
 这时候只要点进去再重新关闭再启用无障碍即可👇
 
 **重新开关权限**：前往手机的“设置” \> “无障碍”（或无障碍功能），找到对应无法运行无障碍的 更好的原神 应用，**关闭其无障碍授权后重新打开**。
+
+开发者文档：[构建与发布](docs/构建与发布.md)。

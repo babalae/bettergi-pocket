@@ -1,7 +1,16 @@
-name: Build arm64 APKs (full + lite)
+name: Build arm64 APKs (story + full)
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: '同时发布 GitHub Release（需配置固定签名密钥）'
+        type: boolean
+        default: false
+      release_version:
+        description: '发布版本号，如 1.0.1（勾选发布时必填，自动更新代码版本）'
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -10,6 +19,10 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 90
+    outputs:
+      version_name: ${{ steps.version.outputs.version_name }}
+      version_code: ${{ steps.version.outputs.version_code }}
+      release_tag: ${{ steps.version.outputs.release_tag }}
     defaults:
       run:
         shell: pwsh
@@ -21,6 +34,24 @@ jobs:
     steps:
       - name: Checkout Pocket
         uses: actions/checkout@v4
+
+      - name: Prepare release version
+        id: version
+        if: ${{ inputs.publish_release }}
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          if ($env:GITHUB_REF_TYPE -ne 'branch') { throw '自动更新版本需要从分支触发，请选择 main 等分支' }
+          $version = ./tools/set-release-version.ps1 -Version ([string]$env:RELEASE_VERSION)
+          git ls-remote --exit-code --tags origin "refs/tags/$($version.Tag)" | Out-Null
+          if ($LASTEXITCODE -eq 0) { throw "发布标签 $($version.Tag) 已存在，请填写新版本号" }
+          if ($LASTEXITCODE -ne 2) { throw '无法检查发布标签' }
+          "version_name=$($version.VersionName)" >> $env:GITHUB_OUTPUT
+          "version_code=$($version.VersionCode)" >> $env:GITHUB_OUTPUT
+          "release_tag=$($version.Tag)" >> $env:GITHUB_OUTPUT
+          "发布版本：$($version.VersionName)，Android versionCode：$($version.VersionCode)" >> $env:GITHUB_STEP_SUMMARY
+          # ls-remote 返回 2 表示标签不存在，此处属于检查通过。
+          exit 0
 
       # 用户指定的 release 分支；仅拉取特产，记录实际提交以便复核。
       - name: Checkout specialty routes
@@ -58,11 +89,12 @@ jobs:
           ./gradlew.bat :app:assembleRelease -PincludePathing=true "-PBAIDU_MTJ_APP_KEY=$env:BAIDU_MTJ_APP_KEY" "-PBAIDU_MTJ_CHANNEL=$env:BAIDU_MTJ_CHANNEL" --max-workers=2 --console=plain
           if ($LASTEXITCODE -ne 0) { throw '完整版构建失败' }
           New-Item -ItemType Directory -Force -Path artifacts/packages | Out-Null
-          Copy-Item app/build/outputs/apk/release/app-release-unsigned.apk artifacts/packages/BetterGI-Pocket-full-arm64-v8a.apk
-          ./tools/verify-apk.ps1 -ApkPath artifacts/packages/BetterGI-Pocket-full-arm64-v8a.apk -Edition full
+          Copy-Item app/build/outputs/apk/release/app-release-unsigned.apk artifacts/packages/bettergi-pocket-arm64-full.apk
+          ./tools/verify-apk.ps1 -ApkPath artifacts/packages/bettergi-pocket-arm64-full.apk -Edition full
 
       # 单测失败保留日志和报告，但不阻断精简版构建、APK 签名与上传。
       - name: Run unit tests (non-blocking)
+        id: unit_tests
         continue-on-error: true
         run: |
           ./gradlew.bat :app:testDebugUnitTest -PincludePathing=true "-PBAIDU_MTJ_APP_KEY=$env:BAIDU_MTJ_APP_KEY" "-PBAIDU_MTJ_CHANNEL=$env:BAIDU_MTJ_CHANNEL" --max-workers=2 --console=plain
@@ -74,7 +106,8 @@ jobs:
           '单元测试：通过。' >> $env:GITHUB_STEP_SUMMARY
 
       - name: Upload unit test reports
-        if: ${{ always() }}
+        if: ${{ !cancelled() && steps.unit_tests.outcome == 'failure' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-reports-${{ github.run_number }}
@@ -84,12 +117,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Build lite release APK
+      - name: Build story-only release APK
         run: |
           ./gradlew.bat :app:assembleRelease -PincludePathing=false "-PBAIDU_MTJ_APP_KEY=$env:BAIDU_MTJ_APP_KEY" "-PBAIDU_MTJ_CHANNEL=$env:BAIDU_MTJ_CHANNEL" --max-workers=2 --console=plain
           if ($LASTEXITCODE -ne 0) { throw '精简版构建失败' }
-          Copy-Item app/build/outputs/apk/release/app-release-unsigned.apk artifacts/packages/BetterGI-Pocket-lite-arm64-v8a.apk
-          ./tools/verify-apk.ps1 -ApkPath artifacts/packages/BetterGI-Pocket-lite-arm64-v8a.apk -Edition lite
+          Copy-Item app/build/outputs/apk/release/app-release-unsigned.apk artifacts/packages/bettergi-pocket-arm64-story.apk
+          ./tools/verify-apk.ps1 -ApkPath artifacts/packages/bettergi-pocket-arm64-story.apk -Edition lite
 
       - name: Sign both APKs
         env:
@@ -97,11 +130,13 @@ jobs:
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          PUBLISH_RELEASE: ${{ inputs.publish_release }}
         run: |
           $keystore = Join-Path $env:RUNNER_TEMP 'pocket-signing.jks'
           $signingValues = @($env:ANDROID_KEYSTORE_BASE64, $env:ANDROID_STORE_PASSWORD, $env:ANDROID_KEY_ALIAS, $env:ANDROID_KEY_PASSWORD)
           $present = @($signingValues | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
           if ($present -gt 0 -and $present -ne 4) { throw '请完整配置四项 Android 签名 Secrets' }
+          if ($env:PUBLISH_RELEASE -eq 'true' -and $present -ne 4) { throw '发布 GitHub Release 必须配置四项固定 Android 签名 Secrets' }
           if ($present -eq 4) {
             [IO.File]::WriteAllBytes($keystore, [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64))
             '签名：仓库配置的发布密钥' >> $env:GITHUB_STEP_SUMMARY
@@ -121,16 +156,110 @@ jobs:
             & $apksigner verify $apk.FullName
             if ($LASTEXITCODE -ne 0) { throw "APK 签名验证失败：$($apk.Name)" }
             $hash = (Get-FileHash -LiteralPath $apk.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-            "$hash  $($apk.Name)" | Add-Content artifacts/packages/SHA256SUMS.txt -Encoding utf8
+            "SHA-256：$hash  $($apk.Name)" >> $env:GITHUB_STEP_SUMMARY
           }
 
-      - name: Upload both signed arm64 APKs
+      - name: Upload signed story-only APK
         uses: actions/upload-artifact@v4
         with:
-          name: BetterGI-Pocket-arm64-v8a-${{ github.run_number }}
-          path: |
-            artifacts/packages/*.apk
-            artifacts/packages/SHA256SUMS.txt
+          name: bettergi-pocket-arm64-story-${{ github.run_number }}
+          path: artifacts/packages/bettergi-pocket-arm64-story.apk
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+      - name: Upload signed full APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: bettergi-pocket-arm64-full-${{ github.run_number }}
+          path: artifacts/packages/bettergi-pocket-arm64-full.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: ${{ inputs.publish_release }}
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout build source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download both signed APKs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bettergi-pocket-arm64-*-${{ github.run_number }}
+          merge-multiple: true
+          path: artifacts/packages
+
+      - name: Commit release version to source branch
+        id: version_commit
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.build.outputs.version_name }}
+          RELEASE_VERSION_CODE: ${{ needs.build.outputs.version_code }}
+          SOURCE_BRANCH: ${{ github.ref_name }}
+        run: |
+          $version = ./tools/set-release-version.ps1 -Version $env:RELEASE_VERSION
+          if ($version.VersionCode -ne [long]$env:RELEASE_VERSION_CODE) { throw '源码版本与已构建 APK 的版本不一致' }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- version.properties
+          if ($LASTEXITCODE -ne 0) { throw '暂存版本配置失败' }
+          git diff --cached --quiet -- version.properties
+          if ($LASTEXITCODE -eq 1) {
+            git commit -m "chore: release $($version.Tag)"
+            if ($LASTEXITCODE -ne 0) { throw '提交版本配置失败' }
+          } elseif ($LASTEXITCODE -ne 0) {
+            throw '检查版本配置差异失败'
+          }
+          # 普通快进推送；分支在构建期间已有新提交时停止，避免覆盖其他代码。
+          git push origin "HEAD:refs/heads/$env:SOURCE_BRANCH"
+          if ($LASTEXITCODE -ne 0) { throw '版本写回失败：请检查分支保护，或基于分支最新代码重新构建' }
+          $commit = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw '读取版本提交失败' }
+          "sha=$commit" >> $env:GITHUB_OUTPUT
+          "版本已写回分支 $env:SOURCE_BRANCH，提交：$commit" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Publish release with both APKs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          RELEASE_COMMIT: ${{ steps.version_commit.outputs.sha }}
+          RELEASE_VERSION_CODE: ${{ needs.build.outputs.version_code }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = ([string]$env:RELEASE_TAG).Trim()
+          if (-not $tag -or -not $env:RELEASE_COMMIT) { throw '缺少发布版本或版本提交' }
+          if ($tag.StartsWith('-')) { throw 'Release 标签不能以 - 开头' }
+          git check-ref-format "refs/tags/$tag"
+          if ($LASTEXITCODE -ne 0) { throw 'Release 标签格式无效' }
+          $apks = @('bettergi-pocket-arm64-story.apk', 'bettergi-pocket-arm64-full.apk') |
+            ForEach-Object { (Get-Item -LiteralPath "artifacts/packages/$_" -ErrorAction Stop).FullName }
+          $notes = @(
+            '本次构建提供两个 arm64-v8a 安装包：',
+            '- bettergi-pocket-arm64-story.apk：仅自动剧情，不含地图追踪资源。',
+            '- bettergi-pocket-arm64-full.apk：自动剧情 + 地图追踪。',
+            '',
+            "源码提交：$env:RELEASE_COMMIT",
+            "Android versionCode：$env:RELEASE_VERSION_CODE",
+            "构建与测试结果：https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID",
+            '',
+            'SHA-256：'
+          )
+          foreach ($apk in $apks) {
+            $hash = (Get-FileHash -LiteralPath $apk -Algorithm SHA256).Hash.ToLowerInvariant()
+            $notes += "$hash  $([IO.Path]::GetFileName($apk))"
+          }
+          $notesPath = Join-Path $env:RUNNER_TEMP 'pocket-release-notes.md'
+          [IO.File]::WriteAllLines($notesPath, $notes, [Text.UTF8Encoding]::new($false))
+          # 创建新 Release 并附上两个 APK；已有同名 Release 时失败，不覆盖已有附件。
+          gh release create $tag @apks --repo $env:GITHUB_REPOSITORY --target $env:RELEASE_COMMIT --title "BetterGI Pocket $tag" --notes-file $notesPath
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release 发布失败，请检查标签是否已发布及仓库权限' }
+          "GitHub Release：https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$tag" >> $env:GITHUB_STEP_SUMMARY
