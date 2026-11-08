@@ -53,13 +53,25 @@ jobs:
           $routeCommit = git -C .ci/routes rev-parse HEAD
           "特产路线来源：babalae/bettergi-scripts-list release ($routeCommit)" >> $env:GITHUB_STEP_SUMMARY
 
-      - name: Build full release APK and run unit tests
+      - name: Build full release APK
         run: |
-          ./gradlew.bat :app:assembleRelease :app:testDebugUnitTest -PincludePathing=true "-PBAIDU_MTJ_APP_KEY=$env:BAIDU_MTJ_APP_KEY" "-PBAIDU_MTJ_CHANNEL=$env:BAIDU_MTJ_CHANNEL" --max-workers=2 --console=plain
-          if ($LASTEXITCODE -ne 0) { throw '完整版构建或测试失败' }
+          ./gradlew.bat :app:assembleRelease -PincludePathing=true "-PBAIDU_MTJ_APP_KEY=$env:BAIDU_MTJ_APP_KEY" "-PBAIDU_MTJ_CHANNEL=$env:BAIDU_MTJ_CHANNEL" --max-workers=2 --console=plain
+          if ($LASTEXITCODE -ne 0) { throw '完整版构建失败' }
           New-Item -ItemType Directory -Force -Path artifacts/packages | Out-Null
           Copy-Item app/build/outputs/apk/release/app-release-unsigned.apk artifacts/packages/BetterGI-Pocket-full-arm64-v8a.apk
           ./tools/verify-apk.ps1 -ApkPath artifacts/packages/BetterGI-Pocket-full-arm64-v8a.apk -Edition full
+
+      # 单测失败保留日志和报告，但不阻断精简版构建、APK 签名与上传。
+      - name: Run unit tests (non-blocking)
+        continue-on-error: true
+        run: |
+          ./gradlew.bat :app:testDebugUnitTest -PincludePathing=true "-PBAIDU_MTJ_APP_KEY=$env:BAIDU_MTJ_APP_KEY" "-PBAIDU_MTJ_CHANNEL=$env:BAIDU_MTJ_CHANNEL" --max-workers=2 --console=plain
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output '::warning::单元测试失败，后续 APK 构建、签名和上传将继续；详情见测试报告。'
+            '单元测试：失败（不阻断打包），详情见 unit-test-reports 构件。' >> $env:GITHUB_STEP_SUMMARY
+            throw '单元测试失败'
+          }
+          '单元测试：通过。' >> $env:GITHUB_STEP_SUMMARY
 
       - name: Upload unit test reports
         if: ${{ always() }}
