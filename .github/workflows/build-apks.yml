@@ -16,7 +16,81 @@ permissions:
   contents: read
 
 jobs:
+  # 测试与打包使用独立 runner 并行执行；发布仅依赖 build，不等待测试。
+  unit_tests:
+    name: Unit tests (non-blocking)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+      BAIDU_MTJ_APP_KEY: ${{ secrets.BAIDU_MTJ_APP_KEY }}
+      BAIDU_MTJ_CHANNEL: github
+
+    steps:
+      - name: Checkout Pocket
+        uses: actions/checkout@v4
+
+      # 用户指定的 release 分支；仅拉取特产，记录实际提交以便复核。
+      - name: Checkout specialty routes
+        uses: actions/checkout@v4
+        with:
+          repository: babalae/bettergi-scripts-list
+          ref: release
+          path: .ci/routes
+          sparse-checkout: repo/pathing/地方特产
+          persist-credentials: false
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Android SDK components
+        run: |
+          $sdkmanager = Join-Path $env:ANDROID_HOME 'cmdline-tools/latest/bin/sdkmanager.bat'
+          & $sdkmanager --install 'platforms;android-36.1' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+          if ($LASTEXITCODE -ne 0) { throw 'Android SDK 安装失败' }
+
+      - name: Download and synchronize map assets
+        run: |
+          ./tools/prepare-ci-pathing-assets.ps1 -RouteDir .ci/routes/repo/pathing
+          $routeCommit = git -C .ci/routes rev-parse HEAD
+          "特产路线来源：babalae/bettergi-scripts-list release ($routeCommit)" >> $env:GITHUB_STEP_SUMMARY
+
+      # 单测失败保留日志和报告，但不阻断精简版构建、APK 签名与上传。
+      - name: Run unit tests (non-blocking)
+        id: unit_tests
+        continue-on-error: true
+        run: |
+          ./gradlew.bat :app:testDebugUnitTest -PincludePathing=true "-PBAIDU_MTJ_APP_KEY=$env:BAIDU_MTJ_APP_KEY" "-PBAIDU_MTJ_CHANNEL=$env:BAIDU_MTJ_CHANNEL" --max-workers=2 --console=plain
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output '::warning::单元测试失败，后续 APK 构建、签名和上传将继续；详情见测试报告。'
+            '单元测试：失败（不阻断打包），详情见 unit-test-reports 构件。' >> $env:GITHUB_STEP_SUMMARY
+            throw '单元测试失败'
+          }
+          '单元测试：通过。' >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload unit test reports
+        if: ${{ !cancelled() && steps.unit_tests.outcome == 'failure' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports-${{ github.run_number }}
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+          if-no-files-found: ignore
+          retention-days: 14
+
   build:
+    name: Build and sign APKs
     runs-on: windows-latest
     timeout-minutes: 90
     outputs:
@@ -91,31 +165,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifacts/packages | Out-Null
           Copy-Item app/build/outputs/apk/release/app-release-unsigned.apk artifacts/packages/bettergi-pocket-arm64-full.apk
           ./tools/verify-apk.ps1 -ApkPath artifacts/packages/bettergi-pocket-arm64-full.apk -Edition full
-
-      # 单测失败保留日志和报告，但不阻断精简版构建、APK 签名与上传。
-      - name: Run unit tests (non-blocking)
-        id: unit_tests
-        continue-on-error: true
-        run: |
-          ./gradlew.bat :app:testDebugUnitTest -PincludePathing=true "-PBAIDU_MTJ_APP_KEY=$env:BAIDU_MTJ_APP_KEY" "-PBAIDU_MTJ_CHANNEL=$env:BAIDU_MTJ_CHANNEL" --max-workers=2 --console=plain
-          if ($LASTEXITCODE -ne 0) {
-            Write-Output '::warning::单元测试失败，后续 APK 构建、签名和上传将继续；详情见测试报告。'
-            '单元测试：失败（不阻断打包），详情见 unit-test-reports 构件。' >> $env:GITHUB_STEP_SUMMARY
-            throw '单元测试失败'
-          }
-          '单元测试：通过。' >> $env:GITHUB_STEP_SUMMARY
-
-      - name: Upload unit test reports
-        if: ${{ !cancelled() && steps.unit_tests.outcome == 'failure' }}
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: unit-test-reports-${{ github.run_number }}
-          path: |
-            app/build/reports/tests/testDebugUnitTest/
-            app/build/test-results/testDebugUnitTest/
-          if-no-files-found: ignore
-          retention-days: 14
 
       - name: Build story-only release APK
         run: |
