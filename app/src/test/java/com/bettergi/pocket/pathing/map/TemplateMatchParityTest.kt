@@ -27,7 +27,8 @@ class TemplateMatchParityTest {
             val colorPixels = map.templateLayers.sumOf { it.coarseColorMatcher.sourceWidth.toLong() * it.coarseColorMatcher.sourceHeight }
             // 粗匹配彩图常驻 3 个 8 位通道
             println("原生内存：彩图 ${colorPixels * 3 / 1048576} MiB")
-            assertEquals(342, map.templateLayers.size)
+            // 图层数量随地图资源包更新，必须与生成对拍基准时的资源保持一致。
+            assertEquals("地图资源与对拍基准的图层数", PathingTestData.golden.getInt("templateLayerCount"), map.templateLayers.size)
 
             val cases = PathingTestData.golden.getJSONArray("miniMaps")
             val report = StringBuilder()

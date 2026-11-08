@@ -61,6 +61,17 @@ jobs:
           Copy-Item app/build/outputs/apk/release/app-release-unsigned.apk artifacts/packages/BetterGI-Pocket-full-arm64-v8a.apk
           ./tools/verify-apk.ps1 -ApkPath artifacts/packages/BetterGI-Pocket-full-arm64-v8a.apk -Edition full
 
+      - name: Upload unit test reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports-${{ github.run_number }}
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Build lite release APK
         run: |
           ./gradlew.bat :app:assembleRelease -PincludePathing=false "-PBAIDU_MTJ_APP_KEY=$env:BAIDU_MTJ_APP_KEY" "-PBAIDU_MTJ_CHANNEL=$env:BAIDU_MTJ_CHANNEL" --max-workers=2 --console=plain

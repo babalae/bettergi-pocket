@@ -10,6 +10,11 @@
 - `bm_*.png`：从 `Teyvat_0_256.png` 裁出的 480×270 灰度图，放大 4 倍即为合成大地图
 - `golden.json`：视角（含 Gia 兜底）、TemplateMatch 全局/局部定位、SIFT 局部/全局定位、大地图位置与矩形
 
+当前基准使用 `BetterGI.Assets.Map 1.0.26`（366 个 TemplateMatch 图层），与
+`tools/prepare-ci-pathing-assets.ps1` 一致。`golden.json` 中的 `templateLayerCount` 由生成器记录。
+升级 CI 地图资源包时，先将同一版本资源同步到 BetterGI 编译目录，再重新生成基准并同步 Pocket 地图资源；
+新增图层可能改变全局最佳匹配，不能只更新图层数量断言。
+
 ## 运行
 
 需要 .NET 10 SDK，并且 BetterGI 已在本机编译（默认目录见 `BgiGolden.csproj` 的 `BgiBin`）。在仓库根目录执行：

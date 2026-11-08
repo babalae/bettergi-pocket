@@ -55,6 +55,7 @@ public static class Generator
         var templateMap = new TeyvatMapTest();
         templateMap.Layers = BaseMapLayerByTemplateMatch.LoadLayers(templateMap);
         Console.WriteLine($"  图层数 {templateMap.Layers.Count}");
+        root["templateLayerCount"] = templateMap.Layers.Count;
 
         Console.WriteLine("加载 SIFT 2048 图层...");
         var siftMap = new TeyvatMap();

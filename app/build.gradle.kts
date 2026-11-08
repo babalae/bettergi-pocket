@@ -119,6 +119,12 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            // CI 控制台保留断言的期望值与实际值，便于诊断跨环境对拍差异。
+            it.testLogging {
+                exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+            }
+        }
     }
 }
 

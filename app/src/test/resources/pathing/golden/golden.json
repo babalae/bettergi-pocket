@@ -1,6 +1,7 @@
 {
-  "source": "BetterGI E:\\HuiPrograming\\MainProject\\better-genshin-impact\\BetterGenshinImpact\\bin\\Debug\\net10.0-windows10.0.22621.0",
-  "generatedAt": "2026-11-05 12:49:04",
+  "source": "BetterGI (OpenCvSharp 4.11) + BetterGI.Assets.Map 1.0.26",
+  "generatedAt": "2026-11-08 14:03:44",
+  "templateLayerCount": 366,
   "miniMaps": [
     {
       "file": "mm_00.png",
@@ -144,32 +145,32 @@
       "cameraOrientation": 342,
       "gia": 341,
       "templateGlobal": {
-        "x": 19747.926,
-        "y": 8619.682,
-        "mapX": 6510.0366,
-        "mapY": 7978.159,
-        "confidence": 0.982648622605991,
-        "layer": "City_570"
+        "x": 25933.133,
+        "y": 6119.658,
+        "mapX": 3417.434,
+        "mapY": 9228.171,
+        "confidence": 0.9844016912836802,
+        "layer": "City_6009"
       },
       "templateLocal": {
-        "x": 19747.926,
-        "y": 8619.682,
-        "mapX": 6510.0366,
-        "mapY": 7978.159,
-        "confidence": 0.982648622605991,
-        "layer": "City_570"
+        "x": 25933.133,
+        "y": 6119.658,
+        "mapX": 3417.434,
+        "mapY": 9228.171,
+        "confidence": 0.9844016912836802,
+        "layer": "City_6009"
       },
       "templateLocalOffsetPrev": [
-        19787.926,
-        8589.682
+        25973.133,
+        6089.658
       ],
       "templateLocalOffset": {
-        "x": 19747.926,
-        "y": 8619.682,
-        "mapX": 6510.0366,
-        "mapY": 7978.159,
-        "confidence": 0.982648622605991,
-        "layer": "City_570"
+        "x": 25933.133,
+        "y": 6119.658,
+        "mapX": 3417.434,
+        "mapY": 9228.171,
+        "confidence": 0.9844016912836802,
+        "layer": "City_6009"
       },
       "siftLocal": null
     },
@@ -642,32 +643,32 @@
       "cameraOrientation": 36.5,
       "gia": 36,
       "templateGlobal": {
-        "x": 15810,
-        "y": 7326,
-        "mapX": 8479,
-        "mapY": 8625,
-        "confidence": 0.9981384208635649,
-        "layer": "LayeredMap_19_-1"
+        "x": 23079.594,
+        "y": 3922.207,
+        "mapX": 4844.2036,
+        "mapY": 10326.896,
+        "confidence": 0.9985836173024558,
+        "layer": "LayeredMap_29_-1"
       },
       "templateLocal": {
-        "x": 15810,
-        "y": 7326,
-        "mapX": 8479,
-        "mapY": 8625,
-        "confidence": 0.9981384208635649,
-        "layer": "LayeredMap_19_-1"
+        "x": 23079.594,
+        "y": 3922.207,
+        "mapX": 4844.2036,
+        "mapY": 10326.896,
+        "confidence": 0.9985836173024558,
+        "layer": "LayeredMap_29_-1"
       },
       "templateLocalOffsetPrev": [
-        15850,
-        7296
+        23119.594,
+        3892.207
       ],
       "templateLocalOffset": {
-        "x": 15810,
-        "y": 7326,
-        "mapX": 8479,
-        "mapY": 8625,
-        "confidence": 0.9981384208635649,
-        "layer": "LayeredMap_19_-1"
+        "x": 23079.594,
+        "y": 3922.207,
+        "mapX": 4844.2036,
+        "mapY": 10326.896,
+        "confidence": 0.9985836173024558,
+        "layer": "LayeredMap_29_-1"
       },
       "siftLocal": null
     },
