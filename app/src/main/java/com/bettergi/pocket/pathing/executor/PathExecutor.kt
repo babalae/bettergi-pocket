@@ -43,9 +43,11 @@ class PathExecutor(
     private val log: (String) -> Unit,
     private val nowMs: () -> Long = { SystemClock.elapsedRealtime() },
     private val party: PathingParty? = null,
+    /** Debug 入口只请求一次实际脱离，正常路线默认关闭；仍在同一条路线线程内执行。 */
+    private val requestRecovery: () -> Boolean = { false },
 ) {
     private val rotate = CameraRotateTask(runtime, input, locator, log)
-    private val trap = TrapEscaper(runtime, input, rotate, vision, ::locate, log, nowMs)
+    private val trap = TrapEscaper({ input.releaseAll() }, log)
 
     private var inTrap = 0
     private var skipping = false
@@ -58,7 +60,9 @@ class PathExecutor(
     private var pickupWarned = false
     private var routeActions: Set<PathAction> = emptySet()
 
-    fun execute(route: PathingRoute): PathingResult {
+    fun execute(route: PathingRoute): PathingResult = input.withReleasedInput { executeRoute(route) }
+
+    private fun executeRoute(route: PathingRoute): PathingResult {
         if (route.waypoints.isEmpty()) {
             return PathingResult(false, "路线没有路径点，未执行。")
         }
@@ -90,6 +94,7 @@ class PathExecutor(
             var attempt = 0
             while (attempt < PathingSettings.RETRY_TIMES && !runtime.cancelled) {
                 try {
+                    input.releaseAll()
                     activePoint = 0
                     resolveAnomalies(null)
                     val segment = segments[segmentIndex]
@@ -100,33 +105,35 @@ class PathExecutor(
                         activePoint = pointIndex
                         val waypoint = segment[pointIndex]
                         closeSkipIfResumed(segmentIndex, pointIndex)
-                        if (waypoint.kind == WaypointKind.Teleport) {
-                            if (segmentIndex > 0) {
-                                val previous = segments[segmentIndex - 1].last()
-                                val noDelay = previous.kind == WaypointKind.Teleport ||
-                                    previous.action == PathAction.Fight ||
-                                    previous.action == PathAction.NahidaCollect ||
-                                    previous.action == PathAction.PickAround
-                                if (!noDelay) runtime.delay(1000)
-                            }
-                            teleportTo(waypoint, map)
-                        } else {
-                            party?.prepare(routeActions)
-                            beforeMove(waypoint)
-                            if (waypoint.kind == WaypointKind.Orientation) {
-                                faceTo(waypoint)
-                            } else if (waypoint.action != PathAction.UpDownGrabLeaf) {
-                                moveTo(waypoint)
-                            }
-                            if (waypoint.moveMode == MoveMode.Fly && waypoint.action == PathAction.StopFlying) {
-                                stopFlying(waypoint)
-                            }
-                            if (PathingRoutes.isTargetPoint(waypoint)) {
-                                moveCloseTo(waypoint)
-                                pickup()
-                            }
-                            if (!waypoint.actionCode.isNullOrBlank() && !skipping) {
-                                afterMove(waypoint)
+                        input.withReleasedInput {
+                            if (waypoint.kind == WaypointKind.Teleport) {
+                                if (segmentIndex > 0) {
+                                    val previous = segments[segmentIndex - 1].last()
+                                    val noDelay = previous.kind == WaypointKind.Teleport ||
+                                        previous.action == PathAction.Fight ||
+                                        previous.action == PathAction.NahidaCollect ||
+                                        previous.action == PathAction.PickAround
+                                    if (!noDelay) runtime.delay(1000)
+                                }
+                                teleportTo(waypoint, map)
+                            } else {
+                                party?.prepare(routeActions)
+                                beforeMove(waypoint)
+                                if (waypoint.kind == WaypointKind.Orientation) {
+                                    faceTo(waypoint)
+                                } else if (waypoint.action != PathAction.UpDownGrabLeaf) {
+                                    moveTo(waypoint, segment.getOrNull(pointIndex - 1))
+                                }
+                                if (waypoint.moveMode == MoveMode.Fly && waypoint.action == PathAction.StopFlying) {
+                                    stopFlying(waypoint)
+                                }
+                                if (PathingRoutes.isTargetPoint(waypoint)) {
+                                    moveCloseTo(waypoint)
+                                    pickup()
+                                }
+                                if (!waypoint.actionCode.isNullOrBlank() && !skipping) {
+                                    afterMove(waypoint)
+                                }
                             }
                         }
                     }
@@ -193,7 +200,7 @@ class PathExecutor(
         runtime.delay(500)
     }
 
-    private fun moveTo(waypoint: WaypointForTrack) {
+    private fun moveTo(waypoint: WaypointForTrack, previousWaypoint: WaypointForTrack?) {
         if (waypoint.moveMode !in listOf(MoveMode.Fly, MoveMode.Climb, MoveMode.Swim)) party?.walk()
         var sample = sample(waypoint)
         var position = sample.point
@@ -212,7 +219,7 @@ class PathExecutor(
         var offAngleSince = 0L
         input.holdForward()
         while (!runtime.cancelled) {
-            input.holdForward()
+            if (!input.holdForward().succeeded) throw HandledException("摇杆手势派发失败，停止当前任务")
             frame++
             if (nowMs() - started > 240_000L) {
                 throw RetryException("路径点执行超时，放弃整条路径")
@@ -257,17 +264,35 @@ class PathExecutor(
                 if (waypoint.moveMode != MoveMode.Climb && nowMs() - lastRecord > 1000L + extraMs) {
                     lastRecord = nowMs()
                     history += position
-                    if (history.size > 8) {
+                    val forcedRecovery = previousWaypoint != null &&
+                        Navigation.getDistance(previousWaypoint.imageX, previousWaypoint.imageY, position) >= 4.0 &&
+                        requestRecovery()
+                    if (history.size > 8 || forcedRecovery) {
                         val newest = history.last()
-                        val older = history[history.size - 8]
-                        if (abs(newest.x - older.x) + abs(newest.y - older.y) < 3f) {
+                        val older = history.getOrElse(history.size - 8) { newest }
+                        if (forcedRecovery || abs(newest.x - older.x) + abs(newest.y - older.y) < 3f) {
+                            if (forcedRecovery) log("调试：在当前路线线程内触发一次卡死回退")
                             inTrap++
                             if (inTrap > 2) throw RetryException("此路线出现3次卡死，重试一次路线或放弃此路线！")
                             log("疑似卡死，尝试脱离...")
-                            trap.rotateAndMove()
-                            trap.moveTo(waypoint)
+                            val stuckPosition = recoveryPosition(waypoint)
+                            val previous = previousWaypoint?.let { Point2f(it.imageX.toFloat(), it.imageY.toFloat()) }
+                            if (!trap.retreat(stuckPosition, previous) { moveBackTo(it, waypoint) }) {
+                                throw RetryException("卡死回退未成功，重试当前路径段")
+                            }
+                            // 脱离结束后重新建立方向、按键和卡死采样，旧历史不能立即触发下一次脱离。
+                            history.clear()
+                            lastRecord = nowMs()
+                            sprintHeld = false
+                            lastSprintAt = nowMs()
+                            offAngleFrames = 0
+                            offAngleSince = 0L
+                            position = recoveryPosition(waypoint)
+                            if (position.isDefault) throw RetryException("回退后定位失败，停止当前行走")
+                            stablePosition = position
+                            waitUntilRotated(Navigation.getTargetOrientation(waypoint.imageX, waypoint.imageY, position), 5)
                             input.holdForward()
-                            log("卡死脱离结束")
+                            log("卡死脱离结束，重试当前目标点")
                             continue
                         }
                     }
@@ -323,7 +348,7 @@ class PathExecutor(
                     }
                     MoveMode.Climb -> Unit
                     else -> {
-                        if (distance > 20 && PathingSettings.AUTO_RUN && nowMs() - lastSprintAt > 2500L) {
+                        if (distance > PathingSettings.AUTO_RUN_MIN_DISTANCE && PathingSettings.AUTO_RUN && nowMs() - lastSprintAt > 2500L) {
                             lastSprintAt = nowMs()
                             input.tapButton(GameButton.Sprint)
                         }
@@ -344,9 +369,34 @@ class PathExecutor(
                 screen?.bgr?.release()
             }
         }
-        input.releaseView()
-        input.releasePad()
-        input.releaseButton(GameButton.Sprint)
+        input.releaseAll()
+    }
+
+    /** 在原路线线程上回走，不执行跳跃、攻击、拾取、续盾或再次脱离。 */
+    private fun moveBackTo(target: Point2f, waypoint: WaypointForTrack): Boolean {
+        val started = nowMs()
+        while (true) {
+            runtime.delay(0)
+            if (nowMs() - started >= 30_000L) {
+                log("卡死回退超时，停止移动")
+                return false
+            }
+            val position = recoveryPosition(waypoint)
+            if (position.isDefault) {
+                log("卡死回退定位失败，停止移动")
+                return false
+            }
+            if (Navigation.getDistance(target.x.toDouble(), target.y.toDouble(), position) <= 1.0) return true
+            val orientation = Navigation.getTargetOrientation(target.x.toDouble(), target.y.toDouble(), position)
+            if (!rotate.waitUntilRotatedTo(orientation, 5, maxTryTimes = 40)) return false
+            try {
+                if (!input.holdForward().succeeded) throw HandledException("卡死回退摇杆按下失败")
+                runtime.delay(100)
+            } finally {
+                input.releaseAll()
+            }
+            runtime.delay(50)
+        }
     }
 
     private fun moveCloseTo(waypoint: WaypointForTrack) {
@@ -501,6 +551,12 @@ class PathExecutor(
     }
 
     /** 卡死脱困用的原始定位，不走识别失败兜底（BGI `TrapEscaper` 直接调 `Navigation.GetPosition`）。 */
+    private fun recoveryPosition(waypoint: WaypointForTrack): Point2f {
+        val frame = runtime.nextFrame(LocationReport.FRESH_FRAME_TIMEOUT_MS) ?: return Point2f.DEFAULT
+        return try { locate(frame, waypoint) } finally { frame.bgr.release() }
+    }
+
+    /** 对当前回退帧定位，失败时返回空位置，不能沿用旧位置盲走。 */
     private fun locate(frame: CapturedBgrFrame, waypoint: WaypointForTrack): Point2f {
         val miniMap = locator.extract(frame.bgr) ?: return Point2f.DEFAULT
         try {

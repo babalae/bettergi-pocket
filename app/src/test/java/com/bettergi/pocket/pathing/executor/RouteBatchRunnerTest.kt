@@ -8,6 +8,28 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RouteBatchRunnerTest {
+    @Test
+    fun `every route including skipped files clears input before reading and after exit`() {
+        val events = ArrayList<String>()
+        var held = true
+        val sources = listOf("first", "invalid", "last").map { name ->
+            PathingRouteSource(name) {
+                assertTrue("读新任务前必须释放旧操作", !held)
+                events += "read:$name"
+                if (name == "invalid") "{" else supported
+            }
+        }
+        RouteBatchRunner({}, {}, {}, clearInput = { held = false; events += "clear" }).run(sources) {
+            assertTrue(!held)
+            held = true
+            events += "execute"
+            PathingResult(true, null)
+        }
+        assertEquals(listOf("clear", "read:first", "execute", "clear", "clear", "read:invalid", "clear",
+            "clear", "read:last", "execute", "clear"), events)
+        assertTrue(!held)
+    }
+
     private val logs = ArrayList<String>()
     private val statuses = ArrayList<String>()
     private val supported = """{"positions":[{"x":1,"y":2,"action":"log_output"}]}"""

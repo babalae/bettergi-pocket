@@ -333,6 +333,7 @@ class OverlayWindowController(
         passthroughDepth++
         applyTouchPassthrough(params, rootView, passthrough = true)
         applyTouchPassthrough(logHandleParams, logHandleView, passthrough = true)
+        applyTouchPassthrough(logBodyParams, logBodyView, passthrough = true)
         return true
     }
 
@@ -342,6 +343,7 @@ class OverlayWindowController(
         if (passthroughDepth > 0) return
         applyTouchPassthrough(params, rootView, passthrough = false)
         applyTouchPassthrough(logHandleParams, logHandleView, passthrough = false)
+        applyTouchPassthrough(logBodyParams, logBodyView, passthrough = false)
     }
 
     private fun applyTouchPassthrough(
@@ -351,12 +353,16 @@ class OverlayWindowController(
     ) {
         if (lp == null || view == null) return
         val hasFlag = lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0
-        if (passthrough == hasFlag) return
-        lp.flags = if (passthrough) {
+        val notTouchable = passthrough || view === logBodyView
+        // 仅置 NOT_TOUCHABLE 仍可能被系统当作不可信遮挡；注入期间同时让窗口透明。
+        val alpha = if (passthrough) 0f else 1f
+        if (notTouchable == hasFlag && lp.alpha == alpha) return
+        lp.flags = if (notTouchable) {
             lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         } else {
             lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         }
+        lp.alpha = alpha
         try {
             windowManager.updateViewLayout(view, lp)
         } catch (_: Throwable) {
@@ -369,7 +375,8 @@ class OverlayWindowController(
         val right = maxOf(x1, x2)
         val bottom = maxOf(y1, y2)
         return windowIntersects(params, rootView, left, top, right, bottom) ||
-            windowIntersects(logHandleParams, logHandleView, left, top, right, bottom)
+            windowIntersects(logHandleParams, logHandleView, left, top, right, bottom) ||
+            windowIntersects(logBodyParams, logBodyView, left, top, right, bottom)
     }
 
     private fun windowIntersects(
@@ -380,14 +387,17 @@ class OverlayWindowController(
         right: Int,
         bottom: Int,
     ): Boolean {
-        if (lp == null || view == null) return false
+        if (lp == null || view == null || view.visibility != View.VISIBLE) return false
         val width = if (view.width > 0) view.width else return false
         val height = if (view.height > 0) view.height else return false
         val slop = dp(8)
-        val windowLeft = lp.x - slop
-        val windowTop = lp.y - slop
-        val windowRight = lp.x + width + slop
-        val windowBottom = lp.y + height + slop
+        // 挖孔安全区可能让实际窗口位置不同于 LayoutParams 中请求的 x/y。
+        val location = IntArray(2)
+        view.getLocationOnScreen(location)
+        val windowLeft = location[0] - slop
+        val windowTop = location[1] - slop
+        val windowRight = location[0] + width + slop
+        val windowBottom = location[1] + height + slop
         return left <= windowRight && right >= windowLeft && top <= windowBottom && bottom >= windowTop
     }
 

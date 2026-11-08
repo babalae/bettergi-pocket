@@ -23,8 +23,8 @@ data class TemplateHit(
  * 在灰度图上做归一化相关系数匹配。坐标相对整张图，[roi] 为空时搜全图。
  */
 object ScreenTemplate {
-    fun findBest(gray: Mat, template: Mat, roi: IntRect?, threshold: Double): TemplateHit? {
-        return findAll(gray, template, roi, threshold, 1).firstOrNull()
+    fun findBest(gray: Mat, template: Mat, roi: IntRect?, threshold: Double, mask: Mat? = null): TemplateHit? {
+        return findAll(gray, template, roi, threshold, 1, mask).firstOrNull()
     }
 
     fun findAll(
@@ -33,6 +33,7 @@ object ScreenTemplate {
         roi: IntRect?,
         threshold: Double,
         limit: Int,
+        mask: Mat? = null,
     ): List<TemplateHit> {
         if (gray.empty() || template.empty() || limit <= 0) return emptyList()
         val search = (roi ?: IntRect(0, 0, gray.cols(), gray.rows())).clampTo(gray.cols(), gray.rows())
@@ -40,7 +41,17 @@ object ScreenTemplate {
         val view = gray.submat(Rect(search.x, search.y, search.width, search.height))
         val result = Mat()
         try {
-            Imgproc.matchTemplate(view, template, result, Imgproc.TM_CCOEFF_NORMED)
+            if (mask == null) Imgproc.matchTemplate(view, template, result, Imgproc.TM_CCOEFF_NORMED)
+            else {
+                Imgproc.matchTemplate(view, template, result, Imgproc.TM_CCOEFF_NORMED, mask)
+                // 常量区域的掩膜相关系数可能是 NaN/Infinity，不能作为命中。
+                val valid = Mat()
+                try {
+                    Core.inRange(result,Scalar(-1.001),Scalar(1.001),valid)
+                    Core.bitwise_not(valid,valid)
+                    result.setTo(Scalar(-1.0),valid)
+                } finally { valid.release() }
+            }
             val hits = ArrayList<TemplateHit>(limit.coerceAtMost(32))
             var lastX = Int.MIN_VALUE
             var lastY = Int.MIN_VALUE

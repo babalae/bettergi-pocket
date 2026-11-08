@@ -36,6 +36,9 @@ data class PathingSettings(
         /** BGI `AutoRunEnabled` 默认 true。 */
         const val AUTO_RUN = true
 
+        /** 普通行走距目标点超过此距离才间歇冲刺，提前留出步行接近目标的空间。 */
+        const val AUTO_RUN_MIN_DISTANCE = 40
+
         /** BGI `AutoSkipEnabled` 默认 true。 */
         const val AUTO_SKIP = true
 

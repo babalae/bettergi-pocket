@@ -20,15 +20,19 @@ class DeviceAutomationReceiver : BroadcastReceiver() {
                 )
                 return
             }
-            ACTION_START_READOUT, ACTION_STOP_PATHING, ACTION_CAPTURE, ACTION_START_ROUTE -> {
+            ACTION_START_READOUT, ACTION_STOP_PATHING, ACTION_CAPTURE, ACTION_START_ROUTE, ACTION_HUD -> {
                 val action = when (intent.action) {
                     ACTION_START_READOUT -> TriggerForegroundService.ACTION_DEBUG_READOUT
+                    ACTION_HUD -> TriggerForegroundService.ACTION_DEBUG_HUD
                     ACTION_CAPTURE -> TriggerForegroundService.ACTION_DEBUG_CAPTURE
                     ACTION_START_ROUTE -> TriggerForegroundService.ACTION_DEBUG_ROUTE
                     else -> TriggerForegroundService.ACTION_DEBUG_PATHING_STOP
                 }
                 val service = Intent(context, TriggerForegroundService::class.java).setAction(action)
                 intent.getStringExtra("path")?.let { service.putExtra(TriggerForegroundService.EXTRA_ROUTE_PATH, it) }
+                if (intent.action == ACTION_START_ROUTE) {
+                    service.putExtra(TriggerForegroundService.EXTRA_DEBUG_RECOVERY, intent.getBooleanExtra("force_recovery", false))
+                }
                 val accepted = try {
                     context.startService(service)
                     true
@@ -60,6 +64,7 @@ class DeviceAutomationReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        private const val ACTION_HUD = "com.bettergi.pocket.debug.HUD"
         private const val ACTION_STATUS = "com.bettergi.pocket.debug.STATUS"
         private const val ACTION_TAP = "com.bettergi.pocket.debug.TAP"
         private const val ACTION_START_READOUT = "com.bettergi.pocket.debug.PATHING_READOUT"

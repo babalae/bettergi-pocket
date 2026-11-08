@@ -16,6 +16,9 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
 import android.view.WindowManager
+import com.bettergi.pocket.recognition.area.GameUiCalibration
+import com.bettergi.pocket.recognition.area.GameUiCalibrator
+import com.bettergi.pocket.recognition.RecognitionAssets
 import com.bettergi.pocket.recognition.opencv.MatOps
 import kotlin.math.min
 
@@ -45,6 +48,8 @@ class ScreenCaptureController(
     private var lastRecoverElapsedMs = 0L
     private var displayCreatedElapsedMs = 0L
     private var frameSequence = 0L
+    private var calibrationElapsedMs = 0L
+    private val uiCalibrator by lazy { GameUiCalibrator.load(RecognitionAssets(context.assets)) }
 
     fun isRunning(): Boolean = synchronized(lock) {
         mediaProjection != null && virtualDisplay != null && imageReader != null
@@ -127,6 +132,21 @@ class ScreenCaptureController(
                 hasCachedFrame = true
                 lastFrameElapsedMs = SystemClock.elapsedRealtime()
                 val bgr = MatOps.rgbaToBgr(width, height, packed)
+                if (lastFrameElapsedMs - calibrationElapsedMs >= 3000L) {
+                    calibrationElapsedMs = lastFrameElapsedMs
+                    try {
+                        val previous = GameUiCalibration.current
+                        if (previous != null && previous.frameSize != com.bettergi.pocket.recognition.IntSize(width, height)) {
+                            GameUiCalibration.clear()
+                        }
+                        uiCalibrator.detect(bgr, GameUiCalibration.current)?.let { geometry ->
+                            if (geometry != GameUiCalibration.current) Log.i(TAG, "HUD 自动标定: $geometry")
+                            GameUiCalibration.current = geometry
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "HUD 标定失败，保留原有适配", e)
+                    }
+                }
                 frameSequence += 1
                 return CapturedBgrFrame(
                     width = width,
@@ -229,6 +249,9 @@ class ScreenCaptureController(
         val current = imageReader
         if (current != null && current.width == width && current.height == height) return
 
+        GameUiCalibration.clear()
+        calibrationElapsedMs = 0L
+        hasCachedFrame = false
         Log.i(TAG, "captured content resized to ${width}x$height")
         val newReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, IMAGE_READER_MAX_IMAGES)
         display.setSurface(newReader.surface)
@@ -306,6 +329,8 @@ class ScreenCaptureController(
         lastRecoverElapsedMs = 0L
         displayCreatedElapsedMs = 0L
         frameSequence = 0L
+        calibrationElapsedMs = 0L
+        GameUiCalibration.clear()
     }
 
     private fun rgbaScratch(size: Int): ByteArray {

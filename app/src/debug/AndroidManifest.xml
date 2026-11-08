@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <activity android:name=".debug.GestureProbeActivity" android:exported="false" />
         <!-- 仅 Debug 包供 ADB 真机验证；普通第三方应用没有 DUMP 权限。 -->
         <receiver
             android:name=".debug.DeviceAutomationReceiver"

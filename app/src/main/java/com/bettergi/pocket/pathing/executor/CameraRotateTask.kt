@@ -26,6 +26,7 @@ class CameraRotateTask(
         if (result is InputResult.NotCalibrated) {
             throw HandledException("${result.what}未标定，无法转动视角")
         }
+        if (!result.succeeded) throw HandledException("视角手势派发失败，停止当前任务")
         return diff
     }
 

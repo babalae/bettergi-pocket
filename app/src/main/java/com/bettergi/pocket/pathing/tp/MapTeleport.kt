@@ -53,8 +53,7 @@ class MapTeleport(
         log("开始传送：${target.name.ifBlank { "坐标" }} ${target.x}, ${target.y}")
         openBigMap(mapName)
         switchCountry(target.country)
-        val neighborDistance = hypot(nearest[0].x - nearest[1].x, nearest[0].y - nearest[1].y)
-        dragToward(target.x, target.y, mapName, MapZoom.finalClickLevel(neighborDistance))
+        dragToward(target.x, target.y, mapName)
         val frame = runtime.nextFrame(500) ?: throw HandledException("打开大地图后没有新画面")
         try {
             val observed = IconAlignment.mergeNearby(bigMap.observedIcons(frame.bgr))
@@ -84,6 +83,7 @@ class MapTeleport(
             if (hypot(click.first - clickPoint.first, click.second - clickPoint.second) > allowed) {
                 throw HandledException("地图校正量超过相邻点安全距离")
             }
+            log("传送点点击：${click.first.roundToInt()},${click.second.roundToInt()}，观测图标 ${observed.size}，对齐 ${alignment.pairCount} 对")
             input.tapNative(click.first.roundToInt(), click.second.roundToInt())
             confirmTeleport()
             waitUntilLoaded()
@@ -158,9 +158,16 @@ class MapTeleport(
                     if (!input.tapNative(hit.first, hit.second).succeeded) {
                         throw HandledException("点击地区 $country 失败")
                     }
-                    log("已选择地区：$country")
                     runtime.delay(800)
-                    return
+                    val confirmation = runtime.nextFrame(500)
+                    if (confirmation != null) {
+                        val closed = try { !bigMap.isRegionPanelOpen(confirmation.bgr) }
+                            finally { confirmation.bgr.release() }
+                        if (closed) {
+                            log("已选择地区：$country")
+                            return
+                        }
+                    }
                 }
             } finally {
                 frame.bgr.release()
@@ -192,7 +199,7 @@ class MapTeleport(
         }
     }
 
-    private fun dragToward(targetX: Double, targetY: Double, mapName: String, finalZoom: Double) {
+    private fun dragToward(targetX: Double, targetY: Double, mapName: String) {
         val zoom = readZoom()
         log("大地图缩放等级 ${"%.2f".format(zoom)}")
         val (start, recoveredZoom) = MapZoom.locateCenter(
@@ -200,6 +207,7 @@ class MapTeleport(
             readCenter = { positionFromBigMap(mapName) },
             adjust = { adjustMapZoom(it) },
         ) ?: throw HandledException("调整缩放后大地图中心仍没有识别出来")
+        log("传送点可见比例已就绪：${"%.2f".format(recoveredZoom)}，保持比例拖图")
         MapDrag.moveToward(
             start = start,
             targetX = targetX,
@@ -208,27 +216,38 @@ class MapTeleport(
             // BGI `MoveMapToCore`：用惯性预测的中心做本地 SIFT
             readCenter = { predicted -> positionFromBigMap(mapName, predicted) },
             drag = { dx, dy -> dragBySteps(dx, dy) },
-            finalZoom = finalZoom,
-            adjustZoom = { adjustMapZoom(it) },
         )
     }
 
     private fun adjustMapZoom(target: Double): Double {
         input.releaseAll()
         val start = readZoom()
-        log("调整大地图缩放：${"%.2f".format(start)} → ${"%.2f".format(target)}（双指）")
+        log("调整大地图缩放：${"%.2f".format(start)} → ${"%.2f".format(target)}（滑块）")
         val actual = MapZoom.adjust(start, target) { current, goal ->
-            val plan = MapZoom.pinchPlan(screenWidth, screenHeight, current, goal)
-            if (!input.pinchMap(plan.startSpan, plan.endSpan, MapZoom.GESTURE_MS).succeeded) {
-                throw HandledException("大地图双指缩放手势没有发出")
+            val frame = runtime.nextFrame(500) ?: throw HandledException("调整大地图缩放时没有新画面")
+            val slider = try { bigMap.zoomSlider(frame.bgr) } finally { frame.bgr.release() }
+                ?: throw HandledException("没有识别到大地图缩放滑块")
+            val targetY = slider.targetY(goal)
+            log("拖动地图缩放滑块：${slider.x},${slider.y} → ${slider.x},$targetY（直接到目标）")
+            if (!input.dragBegin(slider.x, slider.y).succeeded) {
+                throw HandledException("大地图缩放滑块按下失败")
+            }
+            try {
+                runtime.delay(MapZoom.GRIP_MS)
+                if (!input.dragStep(slider.x, targetY, MapZoom.GESTURE_MS).succeeded) {
+                    throw HandledException("大地图缩放滑块拖动失败")
+                }
+                runtime.delay(MapZoom.GESTURE_MS + 40L)
+            } finally {
+                input.dragEnd()
             }
             // 手势完成并等待游戏和截图响应后，才读取新的滑块位置。
-            runtime.delay(MapZoom.GESTURE_MS + MapZoom.SETTLE_MS)
-            readZoom()
+            runtime.delay(MapZoom.SETTLE_MS)
+            readZoom().also { log("地图缩放反馈：${"%.2f".format(current)} → ${"%.2f".format(it)}，目标 ${"%.2f".format(goal)}") }
         }
         log("大地图缩放实际等级 ${"%.2f".format(actual)}")
         if (kotlin.math.abs(actual - target) > MapZoom.PRECISION) {
-            throw HandledException("大地图双指缩放未达到目标等级：$actual / $target")
+            throw HandledException("大地图滑块缩放未达到目标等级：$actual / $target")
         }
         return actual
     }
@@ -433,6 +452,9 @@ interface BigMapUi {
 
     /** BGI 缩放等级 1–6。1 是放得最大，6 是缩得最小。读不到滑块时返回 null。 */
     fun zoomLevel(frame: Mat): Double? = null
+
+    /** 识别到的滑块及轨道原生坐标，用于直接拖动缩放后读回验证。 */
+    fun zoomSlider(frame: Mat): MapZoom.Slider? = null
 
     /** 已经回到主界面，并且大地图已经关上。 */
     fun isWorldUi(frame: Mat): Boolean = false

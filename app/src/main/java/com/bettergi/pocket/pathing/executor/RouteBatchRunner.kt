@@ -13,6 +13,7 @@ class RouteBatchRunner(
     private val log: (String) -> Unit,
     private val onStatus: (String) -> Unit,
     private val onProgress: (PathingProgress) -> Unit = {},
+    private val clearInput: () -> Unit = {},
 ) {
     data class Summary(val completed: Int, val skipped: Int, val failed: Int) {
         val message: String get() = "路线执行结束：完成 $completed，跳过 $skipped，失败 $failed"
@@ -25,6 +26,7 @@ class RouteBatchRunner(
         val startedAt = System.currentTimeMillis()
         for ((index, source) in sources.withIndex()) {
             checkCancelled()
+            clearInput()
             val name = source.name.substringAfterLast('/').removeSuffix(".json")
             onStatus("${index + 1}/${sources.size} · $name")
             onProgress(PathingProgress(index + 1, sources.size, name, completed, skipped, failed, startedAt))
@@ -57,6 +59,8 @@ class RouteBatchRunner(
                 checkCancelled()
                 failed++
                 log("跳过路线 $name：${e.message ?: e.javaClass.simpleName}")
+            } finally {
+                clearInput()
             }
         }
         return Summary(completed, skipped, failed).also {

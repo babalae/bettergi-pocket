@@ -198,6 +198,7 @@ object MapDrag {
      * 把地图中心拖向目标。识别跳变超过 5 次就放弃，其余时候用预测中心继续。
      * 来源：BGI `MoveMapToCore` 的迭代，缩放调整由 [adjustZoom] 单独做。
      * 提供缩放回调时，远距离先缩小，接近目标后放大；不提供时保留固定比例拖图。
+     * Android 传送入口先统一到图标可见比例，不传缩放回调，拖动期间保持实际测得的比例。
      */
     fun moveToward(
         start: Point2f,

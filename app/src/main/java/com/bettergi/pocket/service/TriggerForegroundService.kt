@@ -47,11 +47,14 @@ class TriggerForegroundService : Service() {
     private lateinit var overlayController: OverlayWindowController
     private lateinit var genshinLauncher: GenshinLauncher
     private lateinit var genshinLaunchMonitor: GenshinLaunchMonitor
+    private lateinit var recognitionAssets: RecognitionAssets
+    private var phoneHud: PhoneHud? = null
     private lateinit var engine: TriggerEngine
     private lateinit var pathingController: PathingController
     private lateinit var pathingSettingsRepository: PathingSettingsRepository
     private lateinit var pathingRouteStore: PathingRouteStore
     private lateinit var pathingWindow: PathingWindow
+    private val debugRecoveryRequested = java.util.concurrent.atomic.AtomicBoolean(false)
 
     @Volatile
     private var requestingCapturePermission = false
@@ -102,7 +105,7 @@ class TriggerForegroundService : Service() {
             isGenshinInForeground = { InputAccessibilityService.isGenshinInForeground() },
             canAutoLaunch = { !requestingCapturePermission && !shutDown },
         )
-        val recognitionAssets = RecognitionAssets(applicationContext.assets)
+        recognitionAssets = RecognitionAssets(applicationContext.assets)
         engine = TriggerEngine(
             settingsRepository = settingsRepository,
             captureController = captureController,
@@ -114,7 +117,7 @@ class TriggerForegroundService : Service() {
         )
         pathingSettingsRepository = PathingSettingsRepository(applicationContext)
         pathingRouteStore = PathingRouteStore(applicationContext)
-        val phoneHud = loadPhoneHud(recognitionAssets)
+        phoneHud = loadPhoneHud(recognitionAssets)
         pathingController = PathingController(
             frames = ScreenCaptureFrameSource(captureController),
             partyAssets = applicationContext.assets,
@@ -126,7 +129,10 @@ class TriggerForegroundService : Service() {
             log = { message -> overlayController.log(message) },
             onReadoutChanged = { running -> overlayController.setPathingRunning(running) },
             onStatus = { text -> overlayController.setPathingStatus(text) },
-            onRouteChanged = { running -> overlayController.setRouteRunning(running) },
+            onRouteChanged = { running ->
+                overlayController.setRouteRunning(running)
+                if (!running) debugRecoveryRequested.set(false)
+            },
             captureSize = { captureController.capturedSize() },
             pathingSettings = { pathingSettingsRepository.get() },
             loadRoutes = { pathingRouteStore.readRoutes() },
@@ -134,6 +140,7 @@ class TriggerForegroundService : Service() {
             bigMap = phoneHud ?: UnavailableBigMapUi,
             touch = PassthroughTouchClient(overlayController),
             onProgress = { overlayController.updateProgress(it) },
+            requestRecovery = { BuildConfig.DEBUG && debugRecoveryRequested.compareAndSet(true, false) },
         )
         pathingWindow = PathingWindow(
             base = this,
@@ -191,6 +198,7 @@ class TriggerForegroundService : Service() {
                 if (file == null || !file.isFile) {
                     overlayController.log("找不到路线文件：${path ?: "未指定"}")
                 } else {
+                    debugRecoveryRequested.set(intent.getBooleanExtra(EXTRA_DEBUG_RECOVERY, false) && !pathingController.isRouteRunning())
                     pathingRouteStore.useFile(file)
                     overlayController.log("调试路线 ${file.name}")
                     pathingController.startRoute()
@@ -199,6 +207,9 @@ class TriggerForegroundService : Service() {
             ACTION_DEBUG_PATHING_STOP -> if (BuildConfig.DEBUG) {
                 Log.d(TAG, "debug: stop pathing")
                 pathingController.stop()
+            }
+            ACTION_DEBUG_HUD -> if (BuildConfig.DEBUG) {
+                Thread({ debugHudSnapshot() }, "HudDiagnostic").start()
             }
             ACTION_DEBUG_CAPTURE -> if (BuildConfig.DEBUG) {
                 Log.d(TAG, "debug: request capture permission")
@@ -346,6 +357,49 @@ class TriggerForegroundService : Service() {
         }
     }
 
+    /** Debug 广播仅供真机复核：不点击游戏、不改变功能开关。 */
+    private fun debugHudSnapshot() {
+        if (com.bettergi.pocket.pathing.TaskGate.exclusiveRunning) return
+        val frame = captureController.acquireLatestBgr() ?: run {
+            Log.w(TAG, "HUD diagnostic: no captured frame")
+            return
+        }
+        try {
+            val assets = recognitionAssets
+            val source = com.bettergi.pocket.pathing.map.AndroidMapAssetSource(applicationContext.assets)
+            val layout = PathingLayout.load(source)
+            val hud = phoneHud ?: error("HUD 模板未加载")
+            val geometry = com.bettergi.pocket.recognition.area.GameUiCalibration.current
+            val report = org.json.JSONObject()
+                .put("geometry", geometry.toString())
+                .put("mainUi", hud.isInMainUi(frame.bgr))
+                .put("bigMap", hud.isInBigMap(frame.bgr))
+                .put("closeButton", hud.closeButton(frame.bgr).toString())
+                .put("zoom", hud.zoomLevel(frame.bgr))
+                .put("miniMap", layout.miniMap?.let {
+                    com.bettergi.pocket.pathing.minimap.MiniMapLocator(it).nativeRect(frame.width, frame.height)
+                }.toString())
+            com.bettergi.pocket.recognition.CaptureContent.fromBgr(frame.bgr.clone(), frame.width, frame.height).use { content ->
+                report.put("dialogue", com.bettergi.pocket.feature.autoskip.isDialogueScene(content, assets))
+                val icon = assets.get("AutoSkip", "ChatIcon", content.captureRectArea)
+                report.put("chatIcons", content.findMulti(icon).map { it.centerOnNativeCapture().toString() }.toString())
+            }
+            if (report.optBoolean("mainUi")) {
+                val catalog = com.bettergi.pocket.pathing.party.AvatarCatalog.load(applicationContext.assets)
+                com.bettergi.pocket.pathing.party.NcnnAvatarClassifier(applicationContext.assets, catalog).use { classifier ->
+                    report.put("party", com.bettergi.pocket.pathing.party.PartyRecognition(layout, classifier)
+                        .recognize(frame.bgr)?.visible?.map { "${it.avatar.name}:${it.bounds}" }.toString())
+                }
+            }
+            val dir = File(getExternalFilesDir(null), "hud-diagnostic").apply { mkdirs() }
+            org.opencv.imgcodecs.Imgcodecs.imwrite(File(dir, "screen.png").absolutePath, frame.bgr)
+            File(dir, "report.json").writeText(report.toString(2), Charsets.UTF_8)
+            Log.i(TAG, "HUD diagnostic: $report")
+        } catch (e: Exception) {
+            Log.e(TAG, "HUD diagnostic failed", e)
+        } finally { frame.bgr.release() }
+    }
+
     private fun loadPhoneHud(recognitionAssets: RecognitionAssets): PhoneHud? {
         return try {
             val source = MapManager.assets ?: return null
@@ -379,8 +433,10 @@ class TriggerForegroundService : Service() {
         /** 仅 Debug：ADB 广播直接启动坐标显示/停止，便于真机回归。 */
         const val ACTION_DEBUG_READOUT = "com.bettergi.pocket.debug.PATHING_READOUT"
         const val ACTION_DEBUG_PATHING_STOP = "com.bettergi.pocket.debug.PATHING_STOP"
+        const val ACTION_DEBUG_HUD = "com.bettergi.pocket.action.DEBUG_HUD"
         const val ACTION_DEBUG_CAPTURE = "com.bettergi.pocket.debug.CAPTURE"
         const val ACTION_DEBUG_ROUTE = "com.bettergi.pocket.debug.PATHING_ROUTE"
+        const val EXTRA_DEBUG_RECOVERY = "force_recovery"
         const val EXTRA_ROUTE_PATH = "extra_route_path"
 
         private const val TAG = "BetterGIPocket"

@@ -271,6 +271,7 @@ open class ImageRegion(
             searchOptions = ro.searchOptions,
             canUseReferenceSearch = canUseReferenceSearch(),
             recognitionType = ro.recognitionType,
+            uiGeometry = GameUiCalibration.current,
         )
     }
 

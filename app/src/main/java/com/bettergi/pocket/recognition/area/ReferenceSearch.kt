@@ -59,6 +59,7 @@ object ReferenceSearch {
         searchOptions: SearchOptions?,
         canUseReferenceSearch: Boolean,
         recognitionType: RecognitionTypes = RecognitionTypes.None,
+        uiGeometry: GameUiGeometry? = null,
     ): ReferenceSearchResult? {
         if (hasPartialReferenceSearch(roi, referenceImageSize, referenceBoundingBox, searchOptions)) {
             return null
@@ -82,24 +83,11 @@ object ReferenceSearch {
             return null
         }
 
-        val scale = min(srcWidth / refSize.width.toDouble(), srcHeight / refSize.height.toDouble())
-        if (scale <= 0.0) {
-            return null
-        }
-
-        val (hAnchor, vAnchor) = resolveAnchor(options.anchorMode, bbox, refSize)
-        val scaledRefW = refSize.width * scale
-        val scaledRefH = refSize.height * scale
-        val offsetX = when (hAnchor) {
-            HorizontalAnchor.Right -> srcWidth - scaledRefW
-            HorizontalAnchor.Center -> (srcWidth - scaledRefW) / 2.0
-            HorizontalAnchor.Left -> 0.0
-        }
-        val offsetY = when (vAnchor) {
-            VerticalAnchor.Bottom -> srcHeight - scaledRefH
-            VerticalAnchor.Center -> (srcHeight - scaledRefH) / 2.0
-            VerticalAnchor.Top -> 0.0
-        }
+        val mapping = mapReferenceRect(srcWidth, srcHeight, refSize, bbox, options.anchorMode, uiGeometry)
+            ?: return null
+        val scale = mapping.scale
+        val offsetX = mapping.offsetX
+        val offsetY = mapping.offsetY
 
         val transformedBbox = transformReferenceRect(bbox, scale, offsetX, offsetY)
         val effectiveTemplateSize = IntSize(
@@ -146,6 +134,7 @@ object ReferenceSearch {
         referenceImageSize: IntSize,
         referenceRect: IntRect,
         anchorMode: SearchAnchorMode = SearchAnchorMode.Auto,
+        uiGeometry: GameUiGeometry? = null,
     ): ReferenceRectMapping? {
         if (srcWidth <= 0 || srcHeight <= 0 ||
             referenceImageSize.width <= 0 || referenceImageSize.height <= 0 ||
@@ -153,6 +142,7 @@ object ReferenceSearch {
         ) {
             return null
         }
+        uiGeometry?.mapping(srcWidth, srcHeight, referenceImageSize, referenceRect, anchorMode)?.let { return it }
         val scale = min(srcWidth / referenceImageSize.width.toDouble(), srcHeight / referenceImageSize.height.toDouble())
         val (hAnchor, vAnchor) = resolveAnchor(anchorMode, referenceRect, referenceImageSize)
         val scaledRefW = referenceImageSize.width * scale

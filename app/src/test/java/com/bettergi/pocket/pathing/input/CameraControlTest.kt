@@ -14,6 +14,61 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CameraControlTest {
+    @Test
+    fun `task cleanup runs before action and after cancellation`() {
+        val events = mutableListOf<String>()
+        val client = object : TouchClient by idleClient() {
+            override fun releaseAllAndWait(timeoutMs: Long): Boolean { events += "release"; return true }
+        }
+        val input = GameInput(PathingLayout(referenceSize = null, miniMap = null), 1000, 1000, client)
+        try {
+            input.withReleasedInput {
+                events += "action"
+                throw java.util.concurrent.CancellationException()
+            }
+            org.junit.Assert.fail("取消必须继续向上传播")
+        } catch (_: java.util.concurrent.CancellationException) { }
+        assertEquals(listOf("release", "action", "release"), events)
+    }
+
+    @Test
+    fun `cutout phone forward touch stays above measured joystick center`() {
+        val previous = com.bettergi.pocket.recognition.area.GameUiCalibration.current
+        com.bettergi.pocket.recognition.area.GameUiCalibration.current = com.bettergi.pocket.recognition.area.GameUiGeometry(
+            IntSize(2400,1080),IntSize(3040,1904),0.63,90.0,90.0)
+        try {
+            val calls = ArrayList<Pair<Int,Int>>()
+            val client = object : TouchClient by idleClient() {
+                override fun padHold(x: Int,y: Int): Boolean { calls += x to y;return true }
+            }
+            val layout = PathingLayout(referenceSize=IntSize(3040,1904),miniMap=null,
+                joystick=JoystickLayout(482,1495,150))
+            GameInput(layout,2400,1080,client).holdForward()
+            // 原始截图上中心约 (440,825)，满推约 95 像素；不得向左偏到 x=391。
+            assertTrue(kotlin.math.abs(calls.single().first-440)<=4)
+            assertTrue(kotlin.math.abs(calls.single().second-730)<=4)
+        } finally { com.bettergi.pocket.recognition.area.GameUiCalibration.current = previous }
+    }
+
+    @Test
+    fun `small screen camera correction cannot stall outside two degree tolerance`() {
+        val points = ArrayList<Pair<Int,Int>>()
+        val client = object : TouchClient by idleClient() {
+            override fun dragBegin(x: Int, y: Int): Boolean { points += x to y; return true }
+            override fun dragStep(x: Int, y: Int, durationMs: Long): Boolean { points += x to y; return true }
+        }
+        val layout = PathingLayout(referenceSize=IntSize(1000,1000),miniMap=null,
+            viewArea=ViewAreaLayout(IntRect(250,250,500,500)),cameraGain=0.3)
+        val input = GameInput(layout,500,500,client)
+        assertTrue(input.rotateByDiff(3f).succeeded)
+        assertEquals(listOf(250 to 250,249 to 250),points)
+        assertTrue(input.rotateByDiff(-3f).succeeded)
+        assertEquals(250 to 250,points.last())
+        val count = points.size
+        input.rotateByDiff(0f)
+        assertEquals(count,points.size)
+    }
+
     @Test(expected = TouchReleaseException::class)
     fun `game input requires confirmed release even when submission succeeds`() {
         val client = object : TouchClient by idleClient() {

@@ -55,11 +55,25 @@ class PassthroughTouchClient(
         ok
     }
 
-    override fun tap(x: Int, y: Int, durationMs: Long): Boolean = onMain {
-        val armed = overlay.prepareAreaPassthrough(x, y, x, y)
-        val ok = delegate.tap(x, y, durationMs)
-        if (armed) scheduleRestore(if (ok) durationMs + RESTORE_DELAY_MS else 0L)
-        ok
+    override fun tap(x: Int, y: Int, durationMs: Long): Boolean {
+        var armed = false
+        if (!onMain { armed = overlay.prepareAreaPassthrough(x, y, x, y); true }) return false
+        // WindowManager 的输入窗口更新异步生效；路线线程等待两帧，避免 DOWN 仍落到旧悬浮窗。
+        if (armed && Looper.myLooper() != main.looper) {
+            val ready = CountDownLatch(1)
+            main.postDelayed({ ready.countDown() }, 64L)
+            val updated = try { ready.await(SYNC_TIMEOUT_MS,TimeUnit.MILLISECONDS) }
+                catch (_: InterruptedException) { Thread.currentThread().interrupt(); false }
+            if (!updated) {
+                main.post { overlay.restoreClickPassthrough() }
+                return false
+            }
+        }
+        return onMain {
+            val ok = delegate.tap(x, y, durationMs)
+            if (armed) scheduleRestore(if (ok) durationMs + RESTORE_DELAY_MS else 0L)
+            ok
+        }
     }
 
     override fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Long): Boolean = onMain {

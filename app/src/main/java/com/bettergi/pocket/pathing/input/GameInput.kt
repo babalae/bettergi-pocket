@@ -3,6 +3,7 @@ package com.bettergi.pocket.pathing.input
 import com.bettergi.pocket.pathing.GameButton
 import com.bettergi.pocket.pathing.PathingLayout
 import com.bettergi.pocket.recognition.IntRect
+import com.bettergi.pocket.recognition.area.GameUiCalibration
 import com.bettergi.pocket.recognition.area.ReferenceSearch
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -39,7 +40,19 @@ class GameInput(
 
     fun holdDirection(angleDegrees: Double, magnitude: Double): InputResult {
         val stick = layout.joystick ?: return InputResult.NotCalibrated("摇杆")
-        val mapped = mapPoint(stick.centerX, stick.centerY) ?: return InputResult.NotCalibrated("摇杆")
+        var mapped = mapPoint(stick.centerX, stick.centerY) ?: return InputResult.NotCalibrated("摇杆")
+        val geometry = GameUiCalibration.current
+        val reference = layout.referenceSize
+        if (geometry != null && reference != null && reference == geometry.referenceSize &&
+            geometry.mapping(screenWidth,screenHeight,reference,IntRect(0,0,1,1),
+                com.bettergi.pocket.recognition.SearchAnchorMode.TopLeft) != null) {
+            // 摇杆横向位置按有效 UI 宽度分布；纵向仍保持距底边的缩放距离。
+            // 2400×1080 真机中心约 x=440，单纯左锚会算成 x=391，前推变为斜推。
+            val ratio = screenWidth / geometry.frameSize.width.toDouble()
+            val left = geometry.leftInset * ratio
+            val width = screenWidth - (geometry.leftInset + geometry.rightInset) * ratio
+            mapped = (left + stick.centerX * width / reference.width).roundToInt() to mapped.second
+        }
         val scale = mapScale() ?: return InputResult.NotCalibrated("参考画布")
         val radius = (stick.radius * scale).roundToInt().coerceAtLeast(1)
         val mag = magnitude.coerceIn(0.0, 1.0)
@@ -90,7 +103,12 @@ class GameInput(
         val gain = layout.cameraGain ?: return InputResult.NotCalibrated("视角灵敏度")
         val scale = mapScale() ?: return InputResult.NotCalibrated("参考画布")
         // 增益在参考分辨率下标定，换成当前分辨率的像素/度后再计算并取整。
-        val pixels = CameraControl.swipePixels(diffDegrees, gain * scale)
+        val roundedPixels = CameraControl.swipePixels(diffDegrees, gain * scale)
+        // 小屏缩放后 2～3 度的误差可能舍入成 0，闭环永远进不了 2 度容差。
+        // 非零差角至少移动一个原生像素，保留方向；零差角仍不发送手势。
+        val pixels = if (roundedPixels == 0 && diffDegrees != 0f) {
+            if (diffDegrees > 0f) -1 else 1
+        } else roundedPixels
         if (pixels == 0) return InputResult.Ok
         val area = viewArea() ?: return InputResult.NotCalibrated("视角区")
         var current = viewTouch
@@ -149,6 +167,12 @@ class GameInput(
         return InputResult.Ok
     }
 
+    /** 每个独立动作开始和退出时都清空排队操作，并等待所有触点实际抬起。 */
+    fun <T> withReleasedInput(action: () -> T): T {
+        releaseAll()
+        return try { action() } finally { releaseAll() }
+    }
+
     private fun buttonPoint(button: GameButton): Pair<Int, Int>? {
         val point = layout.buttons[button] ?: return null
         return mapPoint(point.x, point.y)
@@ -163,6 +187,7 @@ class GameInput(
             referenceImageSize = reference,
             referenceRect = area.bbox,
             anchorMode = area.anchorMode,
+            uiGeometry = GameUiCalibration.current,
         )?.rect
     }
 
@@ -173,6 +198,7 @@ class GameInput(
             srcHeight = screenHeight,
             referenceImageSize = reference,
             referenceRect = IntRect(x, y, 1, 1),
+            uiGeometry = GameUiCalibration.current,
         ) ?: return null
         return mapping.rect.x to mapping.rect.y
     }
@@ -180,10 +206,8 @@ class GameInput(
     private fun mapScale(): Double? {
         val reference = layout.referenceSize ?: return null
         if (screenWidth <= 0 || screenHeight <= 0 || reference.width <= 0 || reference.height <= 0) return null
-        return minOf(
-            screenWidth / reference.width.toDouble(),
-            screenHeight / reference.height.toDouble(),
-        )
+        return ReferenceSearch.mapReferenceRect(screenWidth, screenHeight, reference, IntRect(0, 0, 1, 1),
+            uiGeometry = GameUiCalibration.current)?.scale
     }
 
     private companion object {

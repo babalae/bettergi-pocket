@@ -5,16 +5,26 @@ import com.bettergi.pocket.pathing.model.HandledException
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** BGI TpTask 的缩放策略；Android 用双指开合代替鼠标滚轮，每次操作后重新读滑块。 */
+/** BGI TpTask 的缩放策略；Android 直接拖动缩放滑块代替鼠标滚轮，每次操作后重新读滑块。 */
 object MapZoom {
     const val PRECISION = 0.15
     const val ZOOM_OUT_DISTANCE = 1000.0
     const val ZOOM_IN_DISTANCE = 400.0
     const val DISPLAY_TP_LEVEL = 4.4
+    /** Android 真机上 4.4 时普通锚点仍会隐藏，统一放到 3.0 后保持比例拖图。 */
+    const val TELEPORT_VIEW_LEVEL = 3.0
     const val GESTURE_MS = 400L
     const val SETTLE_MS = 250L
+    const val GRIP_MS = 80L
 
     data class Pinch(val startSpan: Int, val endSpan: Int)
+
+    /** 截图中识别到的滑块及轨道端点，均为同一锚定映射下的原生坐标。 */
+    data class Slider(val level: Double, val x: Int, val y: Int, val zoomInY: Int, val zoomOutY: Int) {
+        /** 直接到目标位置，小行程也保持单向拖动，避免先越过目标再返回的往返缩放。 */
+        fun targetY(target: Double): Int =
+            (zoomInY + (zoomOutY - zoomInY) * (target.coerceIn(1.0, 6.0) - 1.0) / 5.0).roundToInt()
+    }
 
     fun pinchPlan(width: Int, height: Int, current: Double, target: Double): Pinch {
         // 等级越小地图越大：放大时两指分开，缩小时两指靠拢。
@@ -27,27 +37,17 @@ object MapZoom {
     /** 来源：BGI GetTeleportFinalClickZoomLevel，邻近点越密集，点击前放得越大。 */
     fun finalClickLevel(neighborDistance: Double): Double = (neighborDistance / 36.0).coerceIn(1.0, DISPLAY_TP_LEVEL)
 
-    /** 缩到最小时可能无法定位，先按 BGI 的 1 级步长向传送点可见比例恢复，再重新识别。 */
+    /** 缩到最小时可能无法定位，先统一放到传送点可见比例再识别；已放得更大则保留当前比例。 */
     fun locateCenter(
         startZoom: Double,
         readCenter: () -> Point2f?,
         adjust: (target: Double) -> Double,
     ): Pair<Point2f, Double>? {
-        var zoom = startZoom
-        readCenter()?.let { return it to zoom }
-        repeat(3) {
-            val target = when {
-                abs(zoom - DISPLAY_TP_LEVEL) <= PRECISION -> zoom - 1.0
-                zoom > DISPLAY_TP_LEVEL -> maxOf(DISPLAY_TP_LEVEL, zoom - 1.0)
-                else -> minOf(DISPLAY_TP_LEVEL, zoom + 1.0)
-            }.coerceIn(1.0, 6.0)
-            zoom = adjust(target)
-            readCenter()?.let { return it to zoom }
-        }
-        return null
+        val zoom = if (startZoom > TELEPORT_VIEW_LEVEL + PRECISION) adjust(TELEPORT_VIEW_LEVEL) else startZoom
+        return readCenter()?.let { it to zoom }
     }
 
-    /** 双指响应不假定固定等级变化；用真实读数闭环，连续两次没有接近目标就停止。 */
+    /** 缩放响应不假定固定等级变化；用真实读数闭环，连续两次没有接近目标就停止。 */
     fun adjust(start: Double, target: Double, apply: (current: Double, target: Double) -> Double): Double {
         val goal = target.coerceIn(1.0, 6.0)
         var current = start.coerceIn(1.0, 6.0)

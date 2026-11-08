@@ -3,6 +3,7 @@ package com.bettergi.pocket.pathing.minimap
 import com.bettergi.pocket.recognition.IntRect
 import com.bettergi.pocket.recognition.IntSize
 import com.bettergi.pocket.recognition.SearchAnchorMode
+import com.bettergi.pocket.recognition.area.GameUiCalibration
 import com.bettergi.pocket.recognition.area.ReferenceSearch
 import org.opencv.core.Mat
 import org.opencv.core.Rect
@@ -47,6 +48,7 @@ class MiniMapLocator(private val layout: MiniMapLayout) {
             referenceImageSize = layout.referenceSize,
             referenceRect = layout.bbox,
             anchorMode = layout.anchorMode,
+            uiGeometry = GameUiCalibration.current,
         ) ?: return null
         // 左上角与 ReferenceSearch.transformReferenceRect 同样取整；边长按缩放比例单独取整，保证正方形
         val x = round(mapping.offsetX + layout.bbox.x * mapping.scale).toInt()

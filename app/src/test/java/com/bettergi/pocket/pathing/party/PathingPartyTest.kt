@@ -91,10 +91,74 @@ class PathingPartyTest {
         assertFalse(game.events.any { it.startsWith("skill:") || it.startsWith("attack:") })
     }
 
-    @Test fun `failed switch aborts instead of treating unchanged portraits as success`() {
+    @Test fun `all failed discovery switches abort instead of treating unchanged portraits as success`() {
         val game = FakeGame().apply { switchingEnabled = false }
         assertThrows(HandledException::class.java) { game.party(PathingSettings()).prepare(emptySet()) }
-        assertEquals(3, game.events.count { it == "switch" })
+        assertEquals(9, game.events.count { it == "switch" })
+    }
+
+    @Test fun `discovery skips failed character and discovers team through another portrait`() {
+        val game = FakeGame().apply { blockedAvatars += "钟离" }
+        val party = game.party(PathingSettings(guardianShortAvatars = emptyList(), guardianLongAvatars = listOf("钟离")))
+        party.prepare(emptySet())
+        assertEquals("芭芭拉", game.active)
+        val taps = game.events.count { it == "switch" }
+        assertFalse(party.renewGuardian())
+        assertEquals(taps, game.events.count { it == "switch" })
+    }
+
+    @Test fun `failed walker is skipped and next configured candidate is used`() {
+        val game = FakeGame()
+        val party = game.party(PathingSettings(mainAvatars = listOf("迪希雅", "丽莎")))
+        party.prepare(emptySet())
+        game.blockedAvatars += "迪希雅"
+        party.walk()
+        assertEquals("丽莎", game.active)
+        val taps = game.events.count { it == "switch" }
+        party.walk()
+        assertEquals(taps, game.events.count { it == "switch" })
+        assertEquals(1, game.logs.count { "切换角色「迪希雅」失败" in it })
+    }
+
+    @Test fun `failed guardian skips skill and remains blocked after team invalidation`() {
+        val game = FakeGame()
+        val party = game.party(PathingSettings(guardianShortAvatars = listOf("丽莎"), guardianLongAvatars = emptyList()))
+        party.prepare(emptySet())
+        game.blockedAvatars += "丽莎"
+        val before = game.events.count { it == "switch" }
+        assertFalse(party.renewGuardian())
+        assertEquals(before + 3, game.events.count { it == "switch" })
+        assertFalse(party.renewGuardian())
+        assertEquals(before + 3, game.events.count { it == "switch" })
+        party.invalidate()
+        party.prepare(emptySet())
+        val taps = game.events.count { it == "switch" }
+        assertFalse(party.renewGuardian())
+        assertEquals(taps, game.events.count { it == "switch" })
+        assertFalse(game.events.any { it.startsWith("skill:") || it.startsWith("down:skill") })
+    }
+
+    @Test fun `failed elemental switch skips attacks and future attempts until a new route`() {
+        val game = FakeGame()
+        val party = game.party(PathingSettings())
+        party.prepare(setOf(PathAction.HydroCollect))
+        game.blockedAvatars += "芭芭拉"
+        val before = game.events.count { it == "switch" }
+        party.collect(PathAction.HydroCollect)
+        assertEquals(before + 3, game.events.count { it == "switch" })
+        party.collect(PathAction.HydroCollect)
+        party.invalidate()
+        party.prepare(setOf(PathAction.HydroCollect))
+        val taps = game.events.count { it == "switch" }
+        party.collect(PathAction.HydroCollect)
+        assertEquals(taps, game.events.count { it == "switch" })
+        assertFalse(game.events.any { it.startsWith("attack:") || it.startsWith("skill:") })
+
+        game.blockedAvatars.clear()
+        val nextParty = game.party(PathingSettings())
+        nextParty.prepare(setOf(PathAction.HydroCollect))
+        nextParty.collect(PathAction.HydroCollect)
+        assertTrue(game.events.contains("attack:芭芭拉"))
     }
 
     @Test fun `guardian long skill respects interval and restores walker`() {
@@ -131,7 +195,9 @@ class PathingPartyTest {
         var time = 1_000L
         var switchingEnabled = true
         var cancelOnSkill = false
+        val blockedAvatars = HashSet<String>()
         val events = ArrayList<String>()
+        val logs = ArrayList<String>()
         private val visible get() = team.filter { it.name != active }
         private val source = object : PathingFrameSource {
             override fun isCapturing() = true
@@ -145,11 +211,15 @@ class PathingPartyTest {
                 buttons = mapOf(GameButton.Attack to ControlPoint(300, 300), GameButton.Skill to ControlPoint(400, 400)))
             return PathingParty(runtime, GameInput(layout, 500, 500, this), PartyRecognizer {
                 PartySnapshot(visible.mapIndexed { index, avatar -> VisibleAvatar(avatar, IntRect(10, index * 30, 10, 10), 1f) })
-            }, settings, UnavailablePathingVision, {}, { time })
+            }, settings, UnavailablePathingVision, { logs += it }, { time })
         }
         override fun tap(x: Int, y: Int, durationMs: Long): Boolean {
             when {
-                x < 100 -> { events += "switch"; if (switchingEnabled) active = visible[y / 30].name }
+                x < 100 -> {
+                    events += "switch"
+                    val target = visible[y / 30].name
+                    if (switchingEnabled && target !in blockedAvatars) active = target
+                }
                 x == 300 -> events += "attack:$active"
                 x == 400 -> events += "skill:$active"
             }

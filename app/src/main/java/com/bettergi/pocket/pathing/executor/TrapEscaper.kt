@@ -1,159 +1,39 @@
 package com.bettergi.pocket.pathing.executor
 
-import com.bettergi.pocket.capture.CapturedBgrFrame
-import com.bettergi.pocket.pathing.GameButton
-import com.bettergi.pocket.pathing.input.GameInput
-import com.bettergi.pocket.pathing.model.WaypointForTrack
-import com.bettergi.pocket.pathing.navigation.Navigation
 import com.bettergi.pocket.pathing.common.Point2f
-import com.bettergi.pocket.pathing.vision.MotionStatus
-import com.bettergi.pocket.pathing.vision.PathingVision
-import java.util.Random
+import kotlin.math.hypot
 
 /**
- * 卡死脱困。分支和时长对齐 BGI `TrapEscaper`。
- * 下落只在识别到攀爬或滑翔时点，避免平时点到别的按钮。
+ * 卡死脱困。参考 BGI `TrapEscaper`，Android 按上一点位的方向回走一半距离，再交还正常行走。
+ * 手机的下落按钮只在攀爬/滑翔时出现；回退流程只行走，退出时统一释放全部触点。
  */
 class TrapEscaper(
-    private val runtime: PathingRuntime,
-    private val input: GameInput,
-    private val rotate: CameraRotateTask,
-    private val vision: PathingVision,
-    private val locate: (CapturedBgrFrame, WaypointForTrack) -> Point2f,
+    private val releaseAll: () -> Unit,
     private val log: (String) -> Unit,
-    private val nowMs: () -> Long,
-    private val random: Random = Random(),
 ) {
-    private var lastActionIndex = 0
-    private var lastActionAtMs = 0L
-    private var randomAngle = 0
-
-    fun moveTo(waypoint: WaypointForTrack) {
-        val started = nowMs()
-        var left = false
-        var position = capturePosition(waypoint)
-        lastActionAtMs = nowMs()
-        rotate.waitUntilRotatedTo(orientation(waypoint, position) , 5)
-        input.holdForward()
-        while (!runtime.cancelled) {
-            val now = nowMs()
-            if (now - lastActionAtMs > 5_000L) break
-            if (now - started > 25_000L) {
-                log("卡死脱困超时")
-                break
-            }
-            position = capturePosition(waypoint)
-            val target = orientation(waypoint, position) + randomAngle
-            rotate.waitUntilRotatedTo(normalizeAngle(target), 5)
-            input.holdForward()
-            if (randomAngle != 0) {
-                randomAngle %= 360
-                if (nowMs() - lastActionAtMs > 1_500L) randomAngle = 0
-            }
-            if (waypoint.moveMode.code != "climb" && waypoint.moveMode.code != "fly" && motion() == MotionStatus.Climb) {
-                input.releasePad()
-                input.tapButton(GameButton.Drop)
-                runtime.delay(75)
-                input.holdBackward()
-                runtime.delay(700)
-                input.releasePad()
-                lastActionAtMs = nowMs()
-                if (!left) increaseRandomAngle() else reduceRandomAngle()
-                continue
-            }
-            runtime.delay(100)
-        }
-        input.releasePad()
-    }
-
-    fun rotateAndMove() {
-        increaseRandomAngle()
-        input.releasePad()
-        dropIfAirborne()
-        runtime.delay(75)
-        input.tapButton(GameButton.Attack)
-        runtime.delay(500)
-        if (nowMs() - lastActionAtMs >= 10_000L) {
-            lastActionIndex = 0
-        } else {
-            lastActionIndex++
-        }
-        val extra = lastActionIndex * 1000
-        when (lastActionIndex % 3) {
-            0 -> moveBackward(1000 + extra)
-            1 -> moveLeft(700 + extra)
-            2 -> moveRight(700 + extra)
-        }
-        lastActionAtMs = nowMs()
-    }
-
-    private fun moveBackward(delayMs: Int) {
-        input.holdBackward()
-        runtime.delay(500)
-        input.tapButton(GameButton.Jump)
-        runtime.delay(delayMs.toLong())
-        input.releasePad()
-    }
-
-    private fun moveLeft(delayMs: Int) {
-        input.holdLeft()
-        runtime.delay(300)
-        input.tapButton(GameButton.Jump)
-        runtime.delay(delayMs.toLong())
-        input.releasePad()
-        dropIfAirborne()
-    }
-
-    private fun moveRight(delayMs: Int) {
-        input.holdRight()
-        runtime.delay(300)
-        input.tapButton(GameButton.Jump)
-        runtime.delay(delayMs.toLong())
-        input.releasePad()
-        dropIfAirborne()
-    }
-
-    /** BGI 无条件按 X。手机的下落按钮只在攀爬/滑翔时出现，所以先看状态。 */
-    private fun dropIfAirborne() {
-        val status = motion()
-        if (status == MotionStatus.Climb || status == MotionStatus.Fly) {
-            input.tapButton(GameButton.Drop)
-        }
-    }
-
-    private fun increaseRandomAngle() {
-        randomAngle += 30 + random.nextInt(15)
-    }
-
-    private fun reduceRandomAngle() {
-        randomAngle += -45 + random.nextInt(15)
-    }
-
-    private fun orientation(waypoint: WaypointForTrack, position: Point2f): Int {
-        return Navigation.getTargetOrientation(waypoint.imageX, waypoint.imageY, position)
-    }
-
-    private fun capturePosition(waypoint: WaypointForTrack): Point2f {
-        val frame = runtime.nextFrame(LocationReport.FRESH_FRAME_TIMEOUT_MS) ?: return Point2f.DEFAULT
+    /** 同步使用调用方的路线线程；定位失败、超时、取消或异常都必须完成输入清理。 */
+    fun retreat(current: Point2f, previous: Point2f?, walkBack: (Point2f) -> Boolean): Boolean {
+        releaseAll()
         try {
-            return locate(frame, waypoint)
+            val target = halfway(current, previous)
+            if (target == null) {
+                log("没有有效的上一点位或回退距离过短，停止本次脱离")
+                return false
+            }
+            log("卡死脱离：向上一点位回走一半距离，目标地图坐标 ${target.x}, ${target.y}")
+            return walkBack(target)
         } finally {
-            frame.bgr.release()
+            releaseAll()
         }
     }
 
-    private fun motion(): MotionStatus {
-        val frame = runtime.nextFrame(LocationReport.FRESH_FRAME_TIMEOUT_MS) ?: return MotionStatus.Unknown
-        try {
-            return vision.motionStatus(frame.bgr)
-        } finally {
-            frame.bgr.release()
+    companion object {
+        fun halfway(current: Point2f, previous: Point2f?): Point2f? {
+            if (previous == null || current.isDefault || previous.isDefault ||
+                !current.x.isFinite() || !current.y.isFinite() ||
+                !previous.x.isFinite() || !previous.y.isFinite()) return null
+            if (hypot((previous.x - current.x).toDouble(), (previous.y - current.y).toDouble()) < 2.0) return null
+            return Point2f((current.x + previous.x) / 2f, (current.y + previous.y) / 2f)
         }
-    }
-
-    private fun normalizeAngle(angle: Int): Int {
-        var value = angle % 360
-        if (value < 0) value += 360
-        return value
     }
 }

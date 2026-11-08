@@ -131,6 +131,12 @@ class PhoneMapTemplateTest {
                         val level = hud.zoomLevel(frame)
                         assertTrue("画面 $size 未识别到等级 $expected 的滑块", level != null)
                         assertEquals("画面 $size", expected, level!!, 0.03)
+                        val slider = hud.zoomSlider(frame)!!
+                        assertEquals(94 * scale, slider.x.toDouble(), 1.0)
+                        // 轨道两个端点必须和滑块使用同一个居中锚点，不能分别按上/下锚定。
+                        for ((targetLevel, targetReferenceY) in listOf(1.0 to 762, 3.5 to 952, 6.0 to 1142)) {
+                            assertEquals(targetReferenceY * scale + offsetY, slider.targetY(targetLevel).toDouble(), 1.0)
+                        }
                     }
                 } finally {
                     scaledKnob.release()

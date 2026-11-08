@@ -6,11 +6,13 @@ import com.bettergi.pocket.feature.autoskip.isDialogueScene
 import com.bettergi.pocket.pathing.PathingLayout
 import com.bettergi.pocket.pathing.tp.BigMapUi
 import com.bettergi.pocket.pathing.tp.MapIcon
+import com.bettergi.pocket.pathing.tp.MapZoom
 import com.bettergi.pocket.recognition.CaptureContent
 import com.bettergi.pocket.recognition.IntRect
 import com.bettergi.pocket.recognition.IntSize
 import com.bettergi.pocket.recognition.RecognitionAssets
 import com.bettergi.pocket.recognition.area.ReferenceRectMapping
+import com.bettergi.pocket.recognition.area.GameUiCalibration
 import com.bettergi.pocket.recognition.area.ReferenceSearch
 import org.opencv.core.CvType
 import org.opencv.core.Mat
@@ -19,7 +21,6 @@ import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 import java.util.IdentityHashMap
 import kotlin.math.abs
-import kotlin.math.min
 
 /**
  * 用联想 TB322FC（3040×1904）截图裁出的模板识别主界面和大地图。
@@ -40,6 +41,7 @@ class PhoneHud(
     private val dialogue: DialogueReader? = null,
     private val regionTitle: Mat? = null,
 ) : PathingVision, BigMapUi {
+    private val paimonMask = HudTemplateMask.paimon(paimon)
     private var cachedScale = 1.0
     private val scaled = IdentityHashMap<Mat, Mat>()
 
@@ -84,13 +86,19 @@ class PhoneHud(
         return hit.centerX to hit.centerY
     }
 
-    override fun zoomLevel(frame: Mat): Double? {
+    override fun zoomLevel(frame: Mat): Double? = zoomSlider(frame)?.level
+
+    override fun zoomSlider(frame: Mat): MapZoom.Slider? {
         val zoom = layout.mapZoom ?: return null
         val hit = hit(frame, zoomKnob, KNOB_ROI, Threshold.ZOOM_KNOB) ?: return null
         val mapping = referenceMapping(frame, KNOB_ROI) ?: return null
         // 与滑块搜索 ROI 共用锚点，把原生截图坐标还原到 layout.json 的参考画布。
         val referenceY = (hit.centerY - mapping.offsetY) / mapping.scale
-        return zoom.level(referenceY)
+        return MapZoom.Slider(
+            zoom.level(referenceY), hit.centerX, hit.centerY,
+            kotlin.math.round(zoom.zoomInY * mapping.scale + mapping.offsetY).toInt(),
+            kotlin.math.round(zoom.zoomOutY * mapping.scale + mapping.offsetY).toInt(),
+        )
     }
 
     override fun isWorldUi(frame: Mat): Boolean = isInMainUi(frame) && !isInBigMap(frame)
@@ -110,7 +118,8 @@ class PhoneHud(
 
     private fun hit(frame: Mat, template: Mat, roi: IntRect?, threshold: Double): TemplateHit? {
         return withGray(frame) { gray ->
-            ScreenTemplate.findBest(gray, prepared(frame, template), mapRoi(frame, roi), threshold)
+            ScreenTemplate.findBest(gray, prepared(frame, template), mapRoi(frame, roi), threshold,
+                if (template === paimon) prepared(frame, paimonMask) else null)
         }
     }
 
@@ -126,10 +135,7 @@ class PhoneHud(
     }
 
     private fun prepared(frame: Mat, template: Mat): Mat {
-        val scale = min(
-            frame.cols() / referenceWidth.toDouble(),
-            frame.rows() / referenceHeight.toDouble(),
-        )
+        val scale = referenceMapping(frame, PAIMON_ROI)?.scale ?: return template
         if (scale <= 0.0 || abs(scale - 1.0) < 0.02) return template
         if (abs(scale - cachedScale) > 0.01) {
             scaled.values.forEach { it.release() }
@@ -163,6 +169,7 @@ class PhoneHud(
             srcHeight = frame.rows(),
             referenceImageSize = IntSize(referenceWidth, referenceHeight),
             referenceRect = roi,
+            uiGeometry = GameUiCalibration.current,
         )
 
     companion object {

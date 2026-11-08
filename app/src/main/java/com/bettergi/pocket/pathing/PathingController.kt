@@ -44,6 +44,7 @@ class PathingController(
     private val bigMap: BigMapUi = UnavailableBigMapUi,
     private val partyAssets: android.content.res.AssetManager? = null,
     private val onProgress: (PathingProgress) -> Unit = {},
+    private val requestRecovery: () -> Boolean = { false },
 ) {
     private val lock = Any()
     private var runtime: PathingRuntime? = null
@@ -249,7 +250,8 @@ class PathingController(
                     log = log,
                 )
                 val settings = pathingSettings()
-                val summary = RouteBatchRunner({ runtime.delay(0) }, log, onStatus, onProgress).run(routes) { route ->
+                val summary = RouteBatchRunner({ runtime.delay(0) }, log, onStatus, onProgress,
+                    clearInput = { input.releaseAll() }).run(routes) { route ->
                     // 每条路线一个执行器，卡死次数和跳过状态不跨路线（BGI 每条路线 new PathExecutor）
                     val needsParty = settings.needsParty ||
                         route.waypoints.any { it.action?.let(com.bettergi.pocket.pathing.party.PathingParty::elementFor) != null }
@@ -268,6 +270,7 @@ class PathingController(
                             teleport = teleport,
                             log = log,
                             party = party,
+                            requestRecovery = requestRecovery,
                         )
                         try {
                             executor.execute(route)

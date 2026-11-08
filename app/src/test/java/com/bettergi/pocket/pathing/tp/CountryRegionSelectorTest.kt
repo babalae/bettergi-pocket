@@ -19,6 +19,23 @@ import org.opencv.imgcodecs.Imgcodecs
 
 class CountryRegionSelectorTest {
     @Test
+    fun `country name in travel notice is not a region button`() {
+        val frame = Mat(1080, 2400, CvType.CV_8UC1, Scalar(0.0))
+        try {
+            val header = OcrResultRegion(IntRect(210,160,400,30), "游逸旅闻：蒙德 璃月 稻妻", 1f)
+            val option = OcrResultRegion(IntRect(210,250,70,40), "蒙德", 1f)
+            val withOption = object : IOcrService {
+                override fun recognize(mat: Mat) = OcrResult(listOf(header,option))
+            }
+            assertEquals(1589 to 270, CountryRegionSelector.find(frame,"蒙德",withOption))
+            val noticeOnly = object : IOcrService {
+                override fun recognize(mat: Mat) = OcrResult(listOf(header))
+            }
+            assertNull(CountryRegionSelector.find(frame,"蒙德",noticeOnly))
+        } finally { frame.release() }
+    }
+
+    @Test
     fun `left column country retains its first character and native click coordinates`() {
         val bytes = checkNotNull(javaClass.getResourceAsStream("/pathing/phone-hud/region-country.png"))
             .use { it.readBytes() }

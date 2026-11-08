@@ -16,6 +16,36 @@ import org.opencv.imgcodecs.Imgcodecs
 @RunWith(AndroidJUnit4::class)
 class NcnnPartyInstrumentedTest {
     @Test
+    fun classifiesCutoutPhoneWithShiftedPartyStrip() {
+        assertTrue(OpenCVLoader.initLocal())
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val assets = instrumentation.targetContext.assets
+        val encoded = MatOfByte(*instrumentation.context.assets.open("party/cutout-party.png").use { it.readBytes() })
+        val image = Imgcodecs.imdecode(encoded, Imgcodecs.IMREAD_COLOR)
+        encoded.release()
+        val previous = com.bettergi.pocket.recognition.area.GameUiCalibration.current
+        com.bettergi.pocket.recognition.area.GameUiCalibration.current = com.bettergi.pocket.recognition.area.GameUiGeometry(
+            IntSize(2400,1080), IntSize(3040,1904), 0.6307563, 89.7245, 89.7245)
+        try {
+            val layout = PathingLayout.parse(assets.open("pathing/layout.json").bufferedReader().use { it.readText() })
+            NcnnAvatarClassifier(assets, AvatarCatalog.load(assets)).use { classifier ->
+                val recognition = PartyRecognition(layout, classifier)
+                repeat(2) {
+                    val party = recognition.recognize(image)
+                    assertNotNull("宽屏手机应自动定位三个头像", party)
+                    assertEquals(listOf("绮良良", "八重神子", "哥伦比娅"), party!!.visible.map { it.avatar.name })
+                    assertTrue(party.visible.first().bounds.y < 240)
+                }
+                val blank = org.opencv.core.Mat.zeros(image.rows(), image.cols(), image.type())
+                try { assertNull(recognition.recognize(blank)) } finally { blank.release() }
+            }
+        } finally {
+            com.bettergi.pocket.recognition.area.GameUiCalibration.current = previous
+            image.release()
+        }
+    }
+
+    @Test
     fun classifiesFromRestrictedWorkerAcrossRouteRestarts() {
         val task = java.util.concurrent.FutureTask {
             val tid = android.os.Process.myTid()

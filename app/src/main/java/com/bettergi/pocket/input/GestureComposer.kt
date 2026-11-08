@@ -57,6 +57,7 @@ class GestureComposer internal constructor(
     private var releasing = false
     private var releaseFailed = false
     private var releaseUncertain = false
+    private var freshPointersInStream = 0
     private val releaseWaiters = ArrayList<ReleaseWaiter>()
 
     private class ReleaseWaiter {
@@ -194,6 +195,7 @@ class GestureComposer internal constructor(
         waiter?.let(releaseWaiters::add)
         // 停止后不再执行排队的点按或转向；正在执行的笔画完成后立即松开持续触点。
         pendingInstants.clear()
+        pendingHoldChange = false
         handler.removeCallbacks(renew)
         if (releaseUncertain) {
             finishRelease(false)
@@ -258,11 +260,18 @@ class GestureComposer internal constructor(
             return true
         }
         val continuing = fingers.values.any { it.stroke != null }
+        if (!continuing) freshPointersInStream = 0
+        val freshCount = fingers.values.count { it.stroke == null } + instants.size
+        if (continuing && freshCount > 0 && freshPointersInStream + freshCount > POINTER_STREAM_BUDGET) {
+            return restartPointerStream(instants)
+        }
         val freshStart = if (continuing) FRESH_STROKE_DELAY_MS else 0L
         val instantEnd = instants.maxOfOrNull { freshStart + it.durationMs } ?: 0L
 
         val prepared = ArrayList<Pair<Finger, GestureDescription.StrokeDescription>>(fingers.size)
-        for (finger in fingers.values) {
+        // AOSP 用当前步骤中的下标生成 POINTER_DOWN：续接的旧触点必须排在新触点之前。
+        // 同号触点在旧抬手回调前重新按下时，LinkedHashMap 的位置不会改变，不能直接沿用插入顺序。
+        for (finger in fingers.values.sortedBy { if (it.stroke == null) 1 else 0 }) {
             val path = movePath(finger.endX, finger.endY, finger.x, finger.y)
             val start = if (finger.stroke == null) freshStart else 0L
             val duration = if (finger.lift) {
@@ -307,6 +316,7 @@ class GestureComposer internal constructor(
             if (releasing) finishRelease(false)
             return false
         }
+        freshPointersInStream += freshCount
         prepared.forEach { (finger, stroke) ->
             // 抬手也要等 onCompleted 才移除，否则取消和等待都会误判为空闲。
             finger.stroke = stroke
@@ -316,6 +326,69 @@ class GestureComposer internal constructor(
         }
         scheduleRenew()
         return true
+    }
+
+    /**
+     * AOSP 的旧笔画映射在全部抬手前不会清除，新指针编号会在 10 饱和并产生重复编号。
+     * 达到预算时先合法抬起所有旧触点，再在完成回调中恢复仍需要的操作；不取消或另开线程。
+     */
+    private fun restartPointerStream(instants: List<Instant>): Boolean {
+        if (instants.isNotEmpty()) pendingInstants.addFirst(instants)
+        val builder = GestureDescription.Builder()
+        try {
+            fingers.values.filter { it.stroke != null }.forEach { finger ->
+                builder.addStroke(finger.stroke!!.continueStroke(pointPath(finger.endX, finger.endY),
+                    0L, LIFT_MS, false))
+            }
+        } catch (error: RuntimeException) {
+            Log.w("BetterGI.Gesture", "重新分配触点前无法确认旧笔画释放", error)
+            pendingInstants.clear()
+            pendingHoldChange = false
+            releaseUncertain = true
+            finishRelease(false)
+            return false
+        }
+        val gen = ++generation
+        dispatching = true
+        val accepted = dispatchGesture(builder.build(), object : AccessibilityService.GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) {
+                handler.post {
+                    if (gen != generation) return@post
+                    dispatching = false
+                    freshPointersInStream = 0
+                    fingers.values.forEach { it.stroke = null }
+                    fingers.values.removeAll { it.lift }
+                    if (releasing || releaseFailed) {
+                        fingers.clear()
+                        pendingInstants.clear()
+                        pendingHoldChange = false
+                        finishRelease(true)
+                    } else {
+                        pendingHoldChange = false
+                        emit(pendingInstants.removeFirstOrNull() ?: emptyList())
+                    }
+                }
+            }
+
+            override fun onCancelled(gestureDescription: GestureDescription?) {
+                handler.post {
+                    if (gen != generation) return@post
+                    dispatching = false
+                    pendingInstants.clear()
+                    pendingHoldChange = false
+                    handler.removeCallbacks(renew)
+                    releaseUncertain = true
+                    finishRelease(false)
+                }
+            }
+        }, handler)
+        if (!accepted) {
+            dispatching = false
+            pendingInstants.clear()
+            pendingHoldChange = false
+            finishRelease(false)
+        }
+        return accepted
     }
 
     /** 连续笔画在完成后仍按下；只在系统确认完成后消费下一个瞬时动作或触点更新。 */
@@ -443,6 +516,7 @@ class GestureComposer internal constructor(
         const val FRESH_STROKE_DELAY_MS = 1L
         const val MAX_EXTERNAL_RESTARTS = 3
         const val SYNC_TIMEOUT_MS = 3000L
+        const val POINTER_STREAM_BUDGET = 8
 
         /** 零长度路径由系统按点按处理，终点等于起点，便于续接。 */
         fun pointPath(x: Float, y: Float): Path = Path().apply {

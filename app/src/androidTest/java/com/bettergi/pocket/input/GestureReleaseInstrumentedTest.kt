@@ -75,6 +75,66 @@ class GestureReleaseInstrumentedTest {
     }
 
     @Test
+    fun releasingDuringPointerStreamResetDoesNotReplayHeldInputsOrQueuedClick() {
+        val h = Harness()
+        onMain { assertTrue(h.composer.padHold(100, 100)) }
+        h.finish()
+        onMain { assertTrue(h.composer.dragBegin(400, 400)) }
+        h.finish()
+        repeat(6) {
+            onMain { assertTrue(h.composer.tap(700, 700, 30)) }
+            h.finish()
+        }
+        onMain {
+            assertTrue(h.composer.tap(700, 700, 30))
+            val lift = h.pending.single().gesture
+            assertEquals(2, lift.strokeCount)
+            assertFalse(lift.getStroke(0).willContinue())
+            assertFalse(lift.getStroke(1).willContinue())
+        }
+        val release = h.release()
+        h.finish()
+        assertTrue(release.get(1, TimeUnit.SECONDS))
+        onMain {
+            assertTrue(h.pending.isEmpty())
+            assertFalse(h.composer.hasHold())
+            assertTrue(h.composer.tap(800, 800, 30))
+        }
+        h.finish()
+    }
+
+    @Test
+    fun repressedPadAlwaysStartsAfterContinuingViewStroke() {
+        val h = Harness()
+        onMain { assertTrue(h.composer.padHold(100, 100)) }
+        h.finish()
+        onMain { assertTrue(h.composer.dragBegin(400, 400)) }
+        h.finish()
+        onMain {
+            assertTrue(h.composer.padRelease())
+            // 旧 pad 尚未完成抬手，同号新 pad 在 LinkedHashMap 中仍位于 drag 前面。
+            assertTrue(h.composer.padHold(200, 200))
+        }
+        h.finish()
+        onMain {
+            val next = h.pending.single().gesture
+            assertEquals(2, next.strokeCount)
+            assertEquals(0L, next.getStroke(0).startTime)
+            assertEquals(1L, next.getStroke(1).startTime)
+            val bounds = android.graphics.RectF()
+            next.getStroke(0).path.computeBounds(bounds, true)
+            assertEquals(400f, bounds.left)
+            next.getStroke(1).path.computeBounds(bounds, true)
+            assertEquals(200f, bounds.left)
+        }
+        h.finish()
+        val release = h.release()
+        h.finish()
+        assertTrue(release.get(1, TimeUnit.SECONDS))
+        onMain { assertFalse(h.composer.hasHold()) }
+    }
+
+    @Test
     fun pinchDispatchesTwoSynchronizedStrokesAndLiftsBoth() {
         val h = Harness()
         onMain {

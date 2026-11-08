@@ -77,10 +77,13 @@ class OverlayStatusInstrumentedTest {
                 val handleParams = field("logHandleParams") as WindowManager.LayoutParams
                 assertTrue(controller!!.prepareClickPassthrough(handleParams.x + handle.width / 2, handleParams.y + handle.height / 2))
                 assertTrue(handleParams.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0)
+                assertEquals("注入期间不能以不透明悬浮窗遮挡游戏", 0f, handleParams.alpha, 0f)
                 controller!!.restoreClickPassthrough()
                 assertEquals(0, handleParams.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
+                assertEquals(1f, handleParams.alpha, 0f)
                 val bodyParams = field("logBodyParams") as WindowManager.LayoutParams
                 assertTrue("正文应始终允许游戏触控穿透", bodyParams.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0)
+                assertEquals(1f, bodyParams.alpha, 0f)
                 assertTrue(handle.findViewById<View>(R.id.overlay_log_stop).performClick())
                 assertEquals(1, stopped)
                 handle.findViewById<View>(R.id.overlay_log_expand).performClick()

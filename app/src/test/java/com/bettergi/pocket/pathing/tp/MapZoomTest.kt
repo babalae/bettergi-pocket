@@ -7,6 +7,32 @@ import org.junit.Test
 
 class MapZoomTest {
     @Test
+    fun `slider corrections go directly to target and stay on track near both ends`() {
+        val down = MapZoom.Slider(1.62, 93, 809, 762, 1142)
+        assertEquals(836, down.targetY(1.973290626826965))
+        val up = MapZoom.Slider(5.34, 93, 1092, 762, 1142)
+        assertEquals(1060, up.targetY(4.92))
+        // 接近轨道末端时也直接抵达端点，避免先反向移动再返回。
+        assertEquals(1142, MapZoom.Slider(5.92, 93, 1136, 762, 1142).targetY(6.0))
+        assertEquals(762, MapZoom.Slider(1.08, 93, 768, 762, 1142).targetY(1.0))
+    }
+
+    @Test
+    fun `tablet small zoom correction drags to absolute slider position and verifies feedback`() {
+        val slider = MapZoom.Slider(5.342105263157895, 94, 1092, 762, 1142)
+        assertEquals(1060, slider.targetY(4.920374711586194))
+        assertEquals(762, slider.targetY(0.0))
+        assertEquals(1142, slider.targetY(7.0))
+        var attempts = 0
+        val actual = MapZoom.adjust(slider.level, 4.920374711586194) { _, goal ->
+            attempts++
+            1.0 + 5.0 * (slider.targetY(goal) - slider.zoomInY) / (slider.zoomOutY - slider.zoomInY)
+        }
+        assertEquals(1, attempts)
+        assertEquals(4.920374711586194, actual, MapZoom.PRECISION)
+    }
+
+    @Test
     fun `zooming in spreads fingers and zooming out brings them together`() {
         for ((width, height) in listOf(3040 to 1904, 1920 to 1080, 1280 to 720)) {
             val zoomIn = MapZoom.pinchPlan(width, height, 6.0, 2.0)
@@ -20,7 +46,7 @@ class MapZoomTest {
     }
 
     @Test
-    fun `smallest map recovers zoom before center recognition can succeed`() {
+    fun `smallest map zooms directly to visible level before center recognition`() {
         var actualZoom = 6.0
         val operations = mutableListOf<String>()
         val result = MapZoom.locateCenter(
@@ -32,15 +58,23 @@ class MapZoomTest {
             adjust = { target -> operations += "zoom:$target"; actualZoom = target; target },
         )!!
         assertEquals(Point2f(10f, 20f), result.first)
-        assertEquals(4.4, result.second, 0.0)
-        assertEquals(listOf("read:6.0", "zoom:5.0", "read:5.0", "zoom:4.4", "read:4.4"), operations)
+        assertEquals(3.0, result.second, 0.0)
+        assertEquals(listOf("zoom:3.0", "read:3.0"), operations)
     }
 
     @Test
-    fun `recognition recovery stops after bounded attempts`() {
+    fun `unrecognized center never causes alternating zoom recovery`() {
         var attempts = 0
         assertNull(MapZoom.locateCenter(6.0, { null }, { attempts++; it }))
-        assertEquals(3, attempts)
+        assertEquals(1, attempts)
+    }
+
+    @Test
+    fun `already visible fine map is not shrunk before dragging`() {
+        val center = Point2f(10f, 20f)
+        val result = MapZoom.locateCenter(2.0, { center }, { fail("已经能看到传送点时不应缩小"); it })!!
+        assertEquals(center, result.first)
+        assertEquals(2.0, result.second, 0.0)
     }
 
     @Test
