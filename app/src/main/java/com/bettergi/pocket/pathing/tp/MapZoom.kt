@@ -37,14 +37,30 @@ object MapZoom {
     /** 来源：BGI GetTeleportFinalClickZoomLevel，邻近点越密集，点击前放得越大。 */
     fun finalClickLevel(neighborDistance: Double): Double = (neighborDistance / 36.0).coerceIn(1.0, DISPLAY_TP_LEVEL)
 
-    /** 缩到最小时可能无法定位，先统一放到传送点可见比例再识别；已放得更大则保留当前比例。 */
+    /** 缩到最小时可能无法定位，传送前先统一放到传送点可见比例；定位失败后换比例重试。 */
     fun locateCenter(
         startZoom: Double,
         readCenter: () -> Point2f?,
         adjust: (target: Double) -> Double,
+        prepareTeleportView: Boolean = true,
+        onRetry: (current: Double, target: Double) -> Unit = { _, _ -> },
     ): Pair<Point2f, Double>? {
-        val zoom = if (startZoom > TELEPORT_VIEW_LEVEL + PRECISION) adjust(TELEPORT_VIEW_LEVEL) else startZoom
-        return readCenter()?.let { it to zoom }
+        var zoom = if (prepareTeleportView && startZoom > TELEPORT_VIEW_LEVEL + PRECISION) {
+            adjust(TELEPORT_VIEW_LEVEL)
+        } else startZoom
+        readCenter()?.let { return it to zoom }
+        val attempted = mutableListOf(zoom)
+        // 参考 BGI 的换比例恢复策略；手机端只用普通锚点可见的 1–3 级，避免重试后图标被隐藏。
+        // 每个比例只尝试一次，成功后返回实际读数供拖图预测使用，不来回切换相同比例。
+        val targets = listOf(TELEPORT_VIEW_LEVEL, 2.0, 1.0).sortedBy { abs(it - zoom) }
+        for (target in targets) {
+            if (attempted.any { abs(it - target) <= PRECISION }) continue
+            onRetry(zoom, target)
+            zoom = adjust(target)
+            attempted += zoom
+            readCenter()?.let { return it to zoom }
+        }
+        return null
     }
 
     /** 缩放响应不假定固定等级变化；用真实读数闭环，连续两次没有接近目标就停止。 */

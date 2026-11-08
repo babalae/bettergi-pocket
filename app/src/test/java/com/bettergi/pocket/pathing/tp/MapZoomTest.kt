@@ -63,10 +63,27 @@ class MapZoomTest {
     }
 
     @Test
-    fun `unrecognized center never causes alternating zoom recovery`() {
-        var attempts = 0
-        assertNull(MapZoom.locateCenter(6.0, { null }, { attempts++; it }))
-        assertEquals(1, attempts)
+    fun `unrecognized center retries distinct visible scales then stops`() {
+        val zooms = mutableListOf<Double>()
+        var reads = 0
+        assertNull(MapZoom.locateCenter(6.0, { reads++; null }, { zooms += it; it }))
+        assertEquals(listOf(3.0, 2.0, 1.0), zooms)
+        assertEquals(3, reads)
+    }
+
+    @Test
+    fun `failed recognition changes scale and returns recovered center with measured zoom`() {
+        var actualZoom = 3.0
+        val center = Point2f(10f, 20f)
+        val zooms = mutableListOf<Double>()
+        val result = MapZoom.locateCenter(
+            actualZoom,
+            readCenter = { if (actualZoom < 2.1) center else null },
+            adjust = { target -> zooms += target; actualZoom = target + 0.05; actualZoom },
+        )!!
+        assertEquals(listOf(2.0), zooms)
+        assertEquals(center, result.first)
+        assertEquals(2.05, result.second, 0.001)
     }
 
     @Test

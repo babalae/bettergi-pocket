@@ -133,7 +133,7 @@ class MapTeleport(
             panelFrame?.bgr?.release()
         }
         if (!panelOpen) {
-            val center = positionFromBigMap("Teyvat")
+            val center = positionFromBigMap("Teyvat", null)
             if (center != null &&
                 !TpCatalog.shouldSwitchCountry(center.x.toDouble(), center.y.toDouble(), hub.first, hub.second)
             ) {
@@ -178,7 +178,17 @@ class MapTeleport(
         throw HandledException("区域名单里没有找到 $country")
     }
 
-    override fun positionFromBigMap(mapName: String): Point2f? = positionFromBigMap(mapName, null)
+    override fun positionFromBigMap(mapName: String): Point2f? {
+        positionFromBigMap(mapName, null)?.let { return it }
+        // 行走时打开大地图兜底定位也要恢复缩放；地区切换和拖图内部使用原始读数，避免嵌套重试。
+        return MapZoom.locateCenter(
+            readZoom(),
+            readCenter = { positionFromBigMap(mapName, null) },
+            adjust = { adjustMapZoom(it) },
+            prepareTeleportView = false,
+            onRetry = { current, target -> logZoomRecovery(current, target) },
+        )?.first
+    }
 
     private fun positionFromBigMap(mapName: String, expected: Point2f?): Point2f? {
         val frame = runtime.nextFrame(500) ?: return null
@@ -204,8 +214,9 @@ class MapTeleport(
         log("大地图缩放等级 ${"%.2f".format(zoom)}")
         val (start, recoveredZoom) = MapZoom.locateCenter(
             zoom,
-            readCenter = { positionFromBigMap(mapName) },
+            readCenter = { positionFromBigMap(mapName, null) },
             adjust = { adjustMapZoom(it) },
+            onRetry = { current, target -> logZoomRecovery(current, target) },
         ) ?: throw HandledException("调整缩放后大地图中心仍没有识别出来")
         log("传送点可见比例已就绪：${"%.2f".format(recoveredZoom)}，保持比例拖图")
         MapDrag.moveToward(
@@ -250,6 +261,10 @@ class MapTeleport(
             throw HandledException("大地图滑块缩放未达到目标等级：$actual / $target")
         }
         return actual
+    }
+
+    private fun logZoomRecovery(current: Double, target: Double) {
+        log("大地图定位失败，调整缩放后重试：${"%.2f".format(current)} → ${"%.2f".format(target)}")
     }
 
     /**
