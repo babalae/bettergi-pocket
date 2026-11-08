@@ -1,0 +1,113 @@
+name: Build arm64 APKs (full + lite)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+      BAIDU_MTJ_APP_KEY: ${{ secrets.BAIDU_MTJ_APP_KEY }}
+      BAIDU_MTJ_CHANNEL: github
+
+    steps:
+      - name: Checkout Pocket
+        uses: actions/checkout@v4
+
+      # 用户指定的 release 分支；仅拉取特产，记录实际提交以便复核。
+      - name: Checkout specialty routes
+        uses: actions/checkout@v4
+        with:
+          repository: babalae/bettergi-scripts-list
+          ref: release
+          path: .ci/routes
+          sparse-checkout: repo/pathing/地方特产
+          persist-credentials: false
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Android SDK components
+        run: |
+          $sdkmanager = Join-Path $env:ANDROID_HOME 'cmdline-tools/latest/bin/sdkmanager.bat'
+          & $sdkmanager --install 'platforms;android-36.1' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+          if ($LASTEXITCODE -ne 0) { throw 'Android SDK 安装失败' }
+
+      - name: Download and synchronize map assets
+        run: |
+          ./tools/prepare-ci-pathing-assets.ps1 -RouteDir .ci/routes/repo/pathing
+          $routeCommit = git -C .ci/routes rev-parse HEAD
+          "特产路线来源：babalae/bettergi-scripts-list release ($routeCommit)" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Build full release APK and run unit tests
+        run: |
+          ./gradlew.bat :app:assembleRelease :app:testDebugUnitTest -PincludePathing=true "-PBAIDU_MTJ_APP_KEY=$env:BAIDU_MTJ_APP_KEY" "-PBAIDU_MTJ_CHANNEL=$env:BAIDU_MTJ_CHANNEL" --max-workers=2 --console=plain
+          if ($LASTEXITCODE -ne 0) { throw '完整版构建或测试失败' }
+          New-Item -ItemType Directory -Force -Path artifacts/packages | Out-Null
+          Copy-Item app/build/outputs/apk/release/app-release-unsigned.apk artifacts/packages/BetterGI-Pocket-full-arm64-v8a.apk
+          ./tools/verify-apk.ps1 -ApkPath artifacts/packages/BetterGI-Pocket-full-arm64-v8a.apk -Edition full
+
+      - name: Build lite release APK
+        run: |
+          ./gradlew.bat :app:assembleRelease -PincludePathing=false "-PBAIDU_MTJ_APP_KEY=$env:BAIDU_MTJ_APP_KEY" "-PBAIDU_MTJ_CHANNEL=$env:BAIDU_MTJ_CHANNEL" --max-workers=2 --console=plain
+          if ($LASTEXITCODE -ne 0) { throw '精简版构建失败' }
+          Copy-Item app/build/outputs/apk/release/app-release-unsigned.apk artifacts/packages/BetterGI-Pocket-lite-arm64-v8a.apk
+          ./tools/verify-apk.ps1 -ApkPath artifacts/packages/BetterGI-Pocket-lite-arm64-v8a.apk -Edition lite
+
+      - name: Sign both APKs
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          $keystore = Join-Path $env:RUNNER_TEMP 'pocket-signing.jks'
+          $signingValues = @($env:ANDROID_KEYSTORE_BASE64, $env:ANDROID_STORE_PASSWORD, $env:ANDROID_KEY_ALIAS, $env:ANDROID_KEY_PASSWORD)
+          $present = @($signingValues | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
+          if ($present -gt 0 -and $present -ne 4) { throw '请完整配置四项 Android 签名 Secrets' }
+          if ($present -eq 4) {
+            [IO.File]::WriteAllBytes($keystore, [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64))
+            '签名：仓库配置的发布密钥' >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            # 无 Secrets 也能得到两个可安装 APK；同一次运行共用此临时测试密钥。
+            $env:ANDROID_STORE_PASSWORD = 'android'
+            $env:ANDROID_KEY_ALIAS = 'androiddebugkey'
+            $env:ANDROID_KEY_PASSWORD = 'android'
+            keytool -genkeypair -keystore $keystore -storetype JKS -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Android Debug,O=Android,C=US'
+            if ($LASTEXITCODE -ne 0) { throw '生成临时测试密钥失败' }
+            '签名：临时测试密钥（不同运行之间不能直接覆盖安装；发布请配置固定签名 Secrets）' >> $env:GITHUB_STEP_SUMMARY
+          }
+          $apksigner = Join-Path $env:ANDROID_HOME 'build-tools/36.0.0/apksigner.bat'
+          foreach ($apk in Get-ChildItem artifacts/packages/*.apk) {
+            & $apksigner sign --ks $keystore --ks-key-alias $env:ANDROID_KEY_ALIAS --ks-pass env:ANDROID_STORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD $apk.FullName
+            if ($LASTEXITCODE -ne 0) { throw "APK 签名失败：$($apk.Name)" }
+            & $apksigner verify $apk.FullName
+            if ($LASTEXITCODE -ne 0) { throw "APK 签名验证失败：$($apk.Name)" }
+            $hash = (Get-FileHash -LiteralPath $apk.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($apk.Name)" | Add-Content artifacts/packages/SHA256SUMS.txt -Encoding utf8
+          }
+
+      - name: Upload both signed arm64 APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: BetterGI-Pocket-arm64-v8a-${{ github.run_number }}
+          path: |
+            artifacts/packages/*.apk
+            artifacts/packages/SHA256SUMS.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

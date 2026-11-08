@@ -20,6 +20,30 @@
 
 ## 使用说明
 
+### 两种 arm64 安装包
+
+- **完整版（full）**：包含地图追踪、NCNN 头像识别和地图资源；路线只保留「地方特产」，首次进入默认打开该目录，旧目录失效时也会回到特产目录。
+- **精简版（lite）**：隐藏地图追踪入口，不初始化追踪功能，不构建或打包 NCNN，也不打包地图、路线、传送点、追踪模板及头像模型。自动对话等功能保留。
+
+本地构建仅输出 `arm64-v8a`：
+
+```powershell
+# 完整版先同步地图资源及地方特产路线
+./tools/sync-pathing-assets.ps1
+./gradlew.bat :app:assembleRelease -PincludePathing=true
+
+# 精简版无需准备任何地图资源
+./gradlew.bat :app:assembleRelease -PincludePathing=false
+```
+
+`includePathing` 默认为 `true`。两次构建使用相同的输出位置 `app/build/outputs/apk/release/app-release-unsigned.apk`，需要保留两个包时请先复制第一次的输出；本地可改用 `assembleDebug` 获得默认调试签名 APK。
+
+GitHub 仓库的 **Actions → Build arm64 APKs (full + lite) → Run workflow** 手动触发一次，会构建、验证并上传两个签名 Release APK 和 SHA-256 清单；没有 push 或 PR 自动触发。产物在该次运行的 Artifacts 中下载。
+
+地图资源不需要提交到 Git：工作流自动下载并校验 BetterGI 使用的 `BetterGI.Assets.Map 1.0.26` NuGet 包，从固定 BetterGI 提交获取 `tp.json`，再从 [bettergi-scripts-list 的 release 分支](https://github.com/babalae/bettergi-scripts-list/tree/release/repo/pathing/地方特产)仅拉取特产路线。运行摘要记录实际路线提交号。地图准备逻辑见 `tools/prepare-ci-pathing-assets.ps1`，最终 APK 检查见 `tools/verify-apk.ps1`。
+
+正式发布可在仓库 **Settings → Secrets and variables → Actions** 配置 `ANDROID_KEYSTORE_BASE64`（签名文件的 Base64）、`ANDROID_STORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD` 四项 Secrets。未配置时会生成同次运行共用的临时测试密钥，两个包可以安装，但不同运行之间需要卸载后重装；使用固定发布密钥可持续覆盖升级。两个版本使用同一应用 ID，可相互覆盖切换。可选配置 `BAIDU_MTJ_APP_KEY`，为空时不启动统计。
+
 1. 安装并打开应用，按提示开启**悬浮窗**权限
 2. 先在应用设置中找到 更好的原神 进行单次授权
 3. 在系统设置中开启无障碍服务「更好的原神」（用于模拟点击、判断原神是否在前台）

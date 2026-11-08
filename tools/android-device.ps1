@@ -97,6 +97,11 @@ switch ($Action) {
             $entry = $metadata.elements | Where-Object { @($_.filters | Where-Object { $_.filterType -eq 'ABI' -and $_.value -eq $abi }).Count -gt 0 } | Select-Object -First 1
             if ($entry) { $apk = Join-Path "$root/app/build/outputs/apk/debug" $entry.outputFile; break }
         }
+        # 仅构建 arm64 后，Gradle 的单 APK 元数据不再包含 ABI split filter。
+        if (!$apk -and 'arm64-v8a' -in $abis) {
+            $entry = $metadata.elements | Where-Object { $_.type -eq 'SINGLE' -and @($_.filters).Count -eq 0 } | Select-Object -First 1
+            if ($entry) { $apk = Join-Path "$root/app/build/outputs/apk/debug" $entry.outputFile }
+        }
         if (!$apk) { throw "No APK matches device ABI: $abis" }
         AdbCall @('install','-r',$apk)
         AdbCall @('shell','appops','set',$package,'SYSTEM_ALERT_WINDOW','allow')

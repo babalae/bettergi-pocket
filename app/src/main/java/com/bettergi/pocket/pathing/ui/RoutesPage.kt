@@ -20,7 +20,7 @@ import com.bettergi.pocket.pathing.settings.PathingRouteStore
 import com.bettergi.pocket.pathing.settings.RouteCatalog
 import com.bettergi.pocket.ui.*
 
-class RouteBrowserState(var directory: String = "", var query: String = "", var scroll: Parcelable? = null)
+class RouteBrowserState(var directory: String = RouteCatalog.DEFAULT_DIRECTORY, var query: String = "", var scroll: Parcelable? = null)
 
 /** 双栏浏览及执行队列；窄屏将队列收进下一级页面。 */
 class RoutesPage(c: Context, private val wide: Boolean, private val state: RouteBrowserState,
@@ -112,7 +112,9 @@ class RoutesPage(c: Context, private val wide: Boolean, private val state: Route
     fun setCatalog(loaded: RouteCatalog) {
         catalog = loaded
         val valid = loaded.resolve(selection).map { it.relativePath }; selection.clear(); selection.addAll(valid)
-        if (state.directory.isNotEmpty() && loaded.node(state.directory) == null) state.directory = ""
+        if (state.directory.isEmpty() || loaded.node(state.directory) == null) {
+            state.directory = RouteCatalog.DEFAULT_DIRECTORY.takeIf { loaded.node(it) != null }.orEmpty()
+        }
         save()
     }
     fun loadFailed(message: String) { progress.visibility = GONE; emptyText.text = message }

@@ -31,7 +31,7 @@ class PathingWindow(private val base: Context, private val store: PathingRouteSt
     private val main = Handler(Looper.getMainLooper())
     private val loader = Executors.newSingleThreadExecutor()
     private val prefs = base.getSharedPreferences("pathing_window_ui", Context.MODE_PRIVATE)
-    private val state = RouteBrowserState(prefs.getString("directory", "").orEmpty())
+    private val state = RouteBrowserState(prefs.getString("directory", RouteCatalog.DEFAULT_DIRECTORY).orEmpty())
     private var tab = prefs.getInt("tab", 0)
     private var context = OverlayUi.context(base)
     private var root: LinearLayout? = null

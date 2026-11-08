@@ -115,6 +115,12 @@ class TriggerForegroundService : Service() {
             ),
             actionController = AccessibilityAutomationController(overlayController),
         )
+        if (BuildConfig.PATHING_ENABLED) initializePathing()
+        settingsRepository.addListener(settingsListener)
+        genshinLaunchMonitor.start()
+    }
+
+    private fun initializePathing() {
         pathingSettingsRepository = PathingSettingsRepository(applicationContext)
         pathingRouteStore = PathingRouteStore(applicationContext)
         phoneHud = loadPhoneHud(recognitionAssets)
@@ -169,8 +175,6 @@ class TriggerForegroundService : Service() {
         }
         overlayController.onPathingOpen = { pathingWindow.show() }
         overlayController.onPathingStop = { pathingController.stop() }
-        settingsRepository.addListener(settingsListener)
-        genshinLaunchMonitor.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -182,7 +186,7 @@ class TriggerForegroundService : Service() {
                 InputAccessibilityService.promptIfDisconnected(applicationContext)
             }
             ACTION_PATHING_ROUTE -> refreshPathingPanel()
-            ACTION_DEBUG_READOUT -> if (BuildConfig.DEBUG) {
+            ACTION_DEBUG_READOUT -> if (BuildConfig.DEBUG && BuildConfig.PATHING_ENABLED) {
                 Log.d(TAG, "debug: start readout")
                 if (!captureController.isRunning()) {
                     Log.w(TAG, "debug: screen capture is not running")
@@ -191,7 +195,7 @@ class TriggerForegroundService : Service() {
                 overlayController.show()
                 pathingController.startReadout()
             }
-            ACTION_DEBUG_ROUTE -> if (BuildConfig.DEBUG) {
+            ACTION_DEBUG_ROUTE -> if (BuildConfig.DEBUG && BuildConfig.PATHING_ENABLED) {
                 val path = intent.getStringExtra(EXTRA_ROUTE_PATH)
                 val file = path?.let(::File)
                 Log.i(TAG, "debug route path=$path exists=${file?.isFile == true}")
@@ -204,11 +208,11 @@ class TriggerForegroundService : Service() {
                     pathingController.startRoute()
                 }
             }
-            ACTION_DEBUG_PATHING_STOP -> if (BuildConfig.DEBUG) {
+            ACTION_DEBUG_PATHING_STOP -> if (BuildConfig.DEBUG && BuildConfig.PATHING_ENABLED) {
                 Log.d(TAG, "debug: stop pathing")
                 pathingController.stop()
             }
-            ACTION_DEBUG_HUD -> if (BuildConfig.DEBUG) {
+            ACTION_DEBUG_HUD -> if (BuildConfig.DEBUG && BuildConfig.PATHING_ENABLED) {
                 Thread({ debugHudSnapshot() }, "HudDiagnostic").start()
             }
             ACTION_DEBUG_CAPTURE -> if (BuildConfig.DEBUG) {

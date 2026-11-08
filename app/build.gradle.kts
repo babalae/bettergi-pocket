@@ -16,6 +16,18 @@ fun analyticsProperty(name: String, fallback: String = ""): String =
         ?: localConfig.getProperty(name)
         ?: fallback
 
+// 同一份源码支持完整版和精简版；精简版不配置 CMake，也不读取地图或头像模型。
+val includePathing = providers.gradleProperty("includePathing").orElse("true").get().let {
+    require(it == "true" || it == "false") { "includePathing 必须为 true 或 false" }
+    it.toBoolean()
+}
+val liteAssetsDir = layout.buildDirectory.dir("generated/liteAssets")
+val prepareLiteAssets by tasks.registering(Sync::class) {
+    from("src/main/assets")
+    exclude("pathing/**", "recognition/Pathing/**", "recognition/Party/**", "licenses/ncnn.txt")
+    into(liteAssetsDir)
+}
+
 // 从本次打包的路线提取匹配方式，选择界面无需逐条解析数千个路线文件。
 val routeMetadataDir = layout.buildDirectory.dir("generated/routeMetadata/assets")
 val generateRouteMetadata by tasks.registering {
@@ -42,7 +54,13 @@ val generateRouteMetadata by tasks.registering {
 
 android {
     namespace = "com.bettergi.pocket"
-    sourceSets.getByName("main").assets.srcDir(routeMetadataDir.get().asFile)
+    sourceSets.getByName("main").assets.apply {
+        if (includePathing) {
+            srcDir(routeMetadataDir.get().asFile)
+        } else {
+            setSrcDirs(listOf(liteAssetsDir.get().asFile))
+        }
+    }
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -55,6 +73,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("boolean", "PATHING_ENABLED", includePathing.toString())
+        ndk { abiFilters += "arm64-v8a" }
 
         // AppKey 为空时不启动统计，可通过 local.properties 或 -P 参数配置。
         resValue("string", "baidu_mtj_app_key", analyticsProperty("BAIDU_MTJ_APP_KEY"))
@@ -64,19 +84,12 @@ android {
     }
 
     ndkVersion = "28.2.13676358"
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
-
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86_64")
-            isUniversalApk = false
+    if (includePathing) {
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.22.1"
+            }
         }
     }
 
@@ -109,7 +122,9 @@ android {
     }
 }
 
-tasks.named("preBuild") { dependsOn(generateRouteMetadata) }
+tasks.named("preBuild") {
+    dependsOn(if (includePathing) generateRouteMetadata else prepareLiteAssets)
+}
 
 dependencies {
     // 官网新版 SDK；Maven Central 的 mtj-sdk 仍是旧版，来源与校验值见 libs/README.md。

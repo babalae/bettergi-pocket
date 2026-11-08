@@ -151,6 +151,7 @@ class RouteCatalog(val roots: List<Node>) {
         const val INDEX_ASSET = "pathing/routes-index.txt"
         const val METADATA_ASSET = "pathing/routes-metadata.json"
         const val ROOT_ASSET = "pathing/routes"
+        const val DEFAULT_DIRECTORY = "地方特产"
         const val SEARCH_LIMIT = 80
 
         private val nameOrder: Collator = Collator.getInstance(Locale.CHINA)

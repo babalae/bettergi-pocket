@@ -25,7 +25,7 @@ class PocketApplication : Application() {
         }
         OcrFactory.init(this)
         // 地图追踪的地图数据从 assets/pathing 读取，首次匹配时才加载
-        MapManager.assets = AndroidMapAssetSource(assets)
+        if (BuildConfig.PATHING_ENABLED) MapManager.assets = AndroidMapAssetSource(assets)
     }
 
     private fun currentProcessName(): String {

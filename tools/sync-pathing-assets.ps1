@@ -12,7 +12,7 @@
     Assets\Map\Teyvat\Teyvat_0_256_SIFT.*        大地图 SIFT（传送）
     Assets\Map\Teyvat\Teyvat_0_2048_SIFT.*       小地图 SIFT（路线 map_match_method = SIFT）
     GameTask\AutoTrackPath\Assets\tp.json        传送点
-    bettergi-scripts-list\repo\pathing\**\*.json 路线 JSON，打进 assets/pathing/routes（不进 git）
+    bettergi-scripts-list\repo\pathing\地方特产\**\*.json 特产路线 JSON，打进 assets/pathing/routes（不进 git）
 
 .PARAMETER BgiBuildDir
   BetterGI 编译输出目录。
@@ -30,9 +30,11 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $destRoot = Join-Path $repoRoot "app\src\main\assets\pathing"
 $srcTeyvat = Join-Path $BgiBuildDir "Assets\Map\Teyvat"
 $srcTp = Join-Path $BgiBuildDir "GameTask\AutoTrackPath\Assets\tp.json"
+$specialtyDir = Join-Path $RouteDir "地方特产"
 
 if (-not (Test-Path $srcTeyvat)) { throw "找不到 BetterGI 地图资源目录：$srcTeyvat" }
 if (-not (Test-Path $srcTp)) { throw "找不到 tp.json：$srcTp" }
+if (-not (Test-Path -LiteralPath $specialtyDir)) { throw "找不到地方特产路线目录：$specialtyDir" }
 
 $destTeyvat = Join-Path $destRoot "Map\Teyvat"
 New-Item -ItemType Directory -Force -Path $destTeyvat | Out-Null
@@ -66,7 +68,8 @@ if (Test-Path $RouteDir) {
         }
         Remove-Item -LiteralPath $resolvedRoutes -Recurse -Force
     }
-    Get-ChildItem -LiteralPath $RouteDir -Recurse -File -Filter *.json | ForEach-Object {
+    # 只同步地方特产，重新同步也不会带回其他分类；索引保留「地方特产/」前缀。
+    Get-ChildItem -LiteralPath $specialtyDir -Recurse -File -Filter *.json | ForEach-Object {
         $rel = $_.FullName.Substring($RouteDir.Length).TrimStart('\', '/').Replace('\', '/')
         $target = Join-Path $destRoutes ($rel.Replace('/', '\'))
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null

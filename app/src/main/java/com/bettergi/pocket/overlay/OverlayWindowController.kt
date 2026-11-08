@@ -44,6 +44,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.widget.ImageViewCompat
 import com.bettergi.pocket.R
+import com.bettergi.pocket.BuildConfig
 import com.bettergi.pocket.analytics.BaiduAnalytics
 import com.bettergi.pocket.bilibili.BilibiliSpaceOpener
 import com.bettergi.pocket.feature.autopick.AutoPickFeature
@@ -223,7 +224,8 @@ class OverlayWindowController(
         pathingRow = root.findViewById(R.id.overlay_row_pathing)
         pathingStatus = root.findViewById<TextView>(R.id.overlay_pathing_status).apply { text = pathingSummary }
         pathingStart = root.findViewById(R.id.overlay_pathing_start)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) root.findViewById<View>(R.id.overlay_group_pathing).visibility = View.GONE
+        if (!BuildConfig.PATHING_ENABLED || Build.VERSION.SDK_INT < Build.VERSION_CODES.O)
+            root.findViewById<View>(R.id.overlay_group_pathing).visibility = View.GONE
         val lp = WindowManager.LayoutParams(-2, -2, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
