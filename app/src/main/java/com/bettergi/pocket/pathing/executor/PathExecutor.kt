@@ -75,6 +75,8 @@ class PathExecutor(
         val resolvedRoute = route.withMatchingMethod(settings.mapMatchingMethod)
         log("小地图匹配方式：${resolvedRoute.mapMatchMethod}")
         val segments = PathingRoutes.segment(resolvedRoute)
+        // 传送等启动流程开始前也响应挂起，展开面板无需等待路线进入行走循环。
+        runtime.pausePoint { input.releaseAll() }
         runtime.delay(100)
         // BGI 只在第一次加载，之后只重置上一位置。地图数据由调用方在整个任务结束时释放
         Navigation.warmUp(resolvedRoute.mapMatchMethod)
@@ -219,6 +221,8 @@ class PathExecutor(
         var offAngleSince = 0L
         input.holdForward()
         while (!runtime.cancelled) {
+            // 面板展开期间挂起注入并释放全部触点，恢复后由循环开头的 holdForward 重新按住摇杆。
+            runtime.pausePoint { input.releaseAll() }
             if (!input.holdForward().succeeded) throw HandledException("摇杆手势派发失败，停止当前任务")
             frame++
             if (nowMs() - started > 240_000L) {

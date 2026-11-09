@@ -29,8 +29,78 @@ class PathingRuntime(
     private var stopCheckedAtNs = 0L
     private var stopCheckedOnce = false
 
+    private val gateLock = Object()
+    private var pauseRequested = false
+    private var quiescedCallback: (() -> Unit)? = null
+
     fun cancel() {
         cancelled = true
+    }
+
+    /**
+     * 请求引擎在下一个安全点挂起注入。[onQuiesced] 在引擎线程上回调一次，此时触点已释放、
+     * 穿透窗口已恢复，悬浮窗面板可以安全展开。由 [PathingController] 切换到主线程。
+     */
+    fun requestPause(onQuiesced: () -> Unit) {
+        synchronized(gateLock) {
+            pauseRequested = true
+            quiescedCallback = onQuiesced
+        }
+    }
+
+    /** 恢复注入；未请求挂起时无操作。 */
+    fun resume() {
+        synchronized(gateLock) {
+            if (!pauseRequested) return
+            pauseRequested = false
+            quiescedCallback = null
+            (gateLock as Object).notifyAll()
+        }
+    }
+
+    /**
+     * 线程退出（正常结束、取消或异常）时的兜底：引擎不再注入手势即视为静默，
+     * 回调一次，避免展开请求无限等待。
+     */
+    fun notifyQuiescedOnExit() {
+        val callback = synchronized(gateLock) {
+            pauseRequested = false
+            val callback = quiescedCallback
+            quiescedCallback = null
+            (gateLock as Object).notifyAll()
+            callback
+        }
+        callback?.invoke()
+    }
+
+    /**
+     * 安全点：已请求挂起时先执行 [quiesce]（释放全部触点），等待穿透窗口的延迟恢复结束，
+     * 回调静默确认，然后阻塞到 [resume]；停止或中断时抛 [CancellationException]。
+     * 未请求挂起时立即返回。
+     */
+    fun pausePoint(quiesce: () -> Unit) {
+        val callback = synchronized(gateLock) { if (pauseRequested) quiescedCallback else return } ?: return
+        quiesce()
+        // 覆盖穿透的延迟 restore（40ms）与跨进程抬手确认，保证回调时窗口已恢复可见可交互。
+        sleep(QUIESCE_SETTLE_MS)
+        // 等待期间若已 resume 又再次 requestPause，本次确认作废，留给下一个安全点。
+        val stillCurrent = synchronized(gateLock) { quiescedCallback === callback }
+        if (stillCurrent) {
+            synchronized(gateLock) { quiescedCallback = null }
+            callback()
+        }
+        synchronized(gateLock) {
+            while (pauseRequested && !cancelled && !Thread.currentThread().isInterrupted) {
+                try {
+                    (gateLock as Object).wait(STOP_CHECK_INTERVAL_MS)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
+                }
+                checkCancelled()
+            }
+        }
+        checkCancelled()
     }
 
     fun isCapturing(): Boolean = frames.isCapturing()
@@ -94,5 +164,6 @@ class PathingRuntime(
     private companion object {
         const val SLEEP_SLICE_MS = 50L
         const val STOP_CHECK_INTERVAL_MS = 500L
+        const val QUIESCE_SETTLE_MS = 150L
     }
 }

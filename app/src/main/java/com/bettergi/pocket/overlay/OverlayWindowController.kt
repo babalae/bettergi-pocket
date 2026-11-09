@@ -129,6 +129,32 @@ class OverlayWindowController(
     var onPathingStart: (() -> Boolean)? = null
     var onPathingOpen: (() -> Unit)? = null
     var onPathingStop: (() -> Unit)? = null
+
+    /**
+     * 路线运行中展开面板前先挂起注入：onQuiesced 在引擎确认静默（触点已释放、穿透已恢复）
+     * 后于主线程回调，此时再展开面板不会被模拟手势的穿透隐藏。
+     */
+    var onRoutePauseRequest: ((onQuiesced: () -> Unit) -> Unit)? = null
+
+    /** 面板完全收起后恢复注入。 */
+    var onRouteResume: (() -> Unit)? = null
+    private var expandPending = false
+
+    /**
+     * 挂起确认的超时处理：路线仍在执行则续期等待；路线已停止（静默回调丢失时的兜底）
+     * 则直接展开，展开请求不会无限等待。
+     */
+    private val expandPendingTimeout: Runnable = Runnable {
+        if (!expandPending) return@Runnable
+        if (routeRunning) {
+            mainHandler.postDelayed(this.expandPendingTimeout, EXPAND_CONFIRM_TIMEOUT_MS)
+            Log.w(TAG, "挂起确认超时，路线仍在执行，继续等待")
+        } else {
+            expandPending = false
+            Log.w(TAG, "挂起确认超时且路线已停止，直接展开面板")
+            if (!expanded && !transforming) setExpanded(true)
+        }
+    }
     private var pathingStart: ImageButton? = null
     private var routeRunning = false
     private var readoutRunning = false
@@ -234,7 +260,7 @@ class OverlayWindowController(
             if (Build.VERSION.SDK_INT >= 30) setFitInsetsTypes(0)
             if (Build.VERSION.SDK_INT >= 28) layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
-        setupDragAndClick(bubbleView!!, lp) { setExpanded(true) }
+        setupDragAndClick(bubbleView!!, lp) { expandFromBubble() }
         setupDrag(root.findViewById(R.id.overlay_header), lp, snapOnRelease = false)
         root.findViewById<View>(R.id.overlay_collapse).setOnClickListener { setExpanded(false) }
         root.setOnTouchListener { _, event -> if (event.actionMasked == MotionEvent.ACTION_OUTSIDE) { collapseOnOutsideTouch(); true } else false }
@@ -330,9 +356,18 @@ class OverlayWindowController(
      */
     fun prepareClickPassthrough(x: Int, y: Int): Boolean = prepareAreaPassthrough(x, y, x, y)
 
+    /**
+     * 面板交互期间禁用穿透：手势注入命中悬浮窗时不再隐藏窗口（手势会被窗口拦截）。
+     * 点击悬浮球时置位，面板完全收起或窗口销毁时复位；与引擎挂起互补——
+     * 挂起保证面板期间基本无注入，此锁兜住未及时挂起的手势。
+     */
+    private var passthroughLocked = false
+
     fun prepareAreaPassthrough(x1: Int, y1: Int, x2: Int, y2: Int): Boolean {
+        if (passthroughLocked) return false
         if (!coversStroke(x1, y1, x2, y2)) return false
         passthroughDepth++
+        Log.d(TAG, "passthrough arm depth=$passthroughDepth")
         applyTouchPassthrough(params, rootView, passthrough = true)
         applyTouchPassthrough(logHandleParams, logHandleView, passthrough = true)
         applyTouchPassthrough(logBodyParams, logBodyView, passthrough = true)
@@ -342,6 +377,7 @@ class OverlayWindowController(
     fun restoreClickPassthrough() {
         if (passthroughDepth == 0) return
         passthroughDepth--
+        Log.d(TAG, "passthrough restore depth=$passthroughDepth")
         if (passthroughDepth > 0) return
         applyTouchPassthrough(params, rootView, passthrough = false)
         applyTouchPassthrough(logHandleParams, logHandleView, passthrough = false)
@@ -405,6 +441,12 @@ class OverlayWindowController(
 
     fun hide() {
         BaiduAnalytics.pageEnd(BaiduAnalytics.PAGE_OVERLAY_PANEL)
+        // 窗口销毁后收起动画的恢复回调不会再触发，这里清除等待状态并补发恢复信号；
+        // runtime 侧 resume/cancel 均为幂等操作。
+        expandPending = false
+        mainHandler.removeCallbacks(expandPendingTimeout)
+        passthroughLocked = false
+        onRouteResume?.invoke()
         stopScreenWatch()
         unregisterA11yReceiver()
         mainHandler.removeCallbacks(idleFadeRunnable)
@@ -502,6 +544,29 @@ class OverlayWindowController(
         }
     }
 
+    /**
+     * 路线运行中点击悬浮球：先请求引擎挂起注入，收到静默确认后再展开面板，
+     * 避免面板刚展开就被视角拖动等模拟手势的穿透隐藏。非运行状态直接展开。
+     */
+    private fun expandFromBubble() {
+        if (expanded || transforming) return
+        val request = onRoutePauseRequest
+        if (!routeRunning || request == null) {
+            setExpanded(true)
+            return
+        }
+        if (expandPending) return
+        expandPending = true
+        // 点击时立即禁用穿透，等待引擎挂起期间到达的手势也不再隐藏悬浮窗。
+        passthroughLocked = true
+        mainHandler.postDelayed(expandPendingTimeout, EXPAND_CONFIRM_TIMEOUT_MS)
+        request {
+            mainHandler.removeCallbacks(expandPendingTimeout)
+            expandPending = false
+            if (!expanded && !transforming) setExpanded(true)
+        }
+    }
+
     private fun setExpanded(value: Boolean) {
         if (expanded == value || transforming) return
         val bubble = bubbleView ?: return
@@ -522,6 +587,8 @@ class OverlayWindowController(
         if (value) {
             refreshLaunchHint()
             resizePanel()
+            // 面板可见期间禁用穿透，手势注入不改变悬浮窗可见性。
+            passthroughLocked = true
             mainHandler.removeCallbacks(idleFadeRunnable)
             panel.alpha = 0f
             panel.scaleX = 0.84f
@@ -574,6 +641,9 @@ class OverlayWindowController(
                     panel.alpha = 1f
                     panel.scaleX = 1f
                     panel.scaleY = 1f
+                    // 面板完全移出后恢复穿透与注入，收起动画中残留的画面不会被隐藏。
+                    passthroughLocked = false
+                    onRouteResume?.invoke()
                 }
                 .start()
             bubble.animate()
@@ -1185,7 +1255,8 @@ class OverlayWindowController(
 
     private fun scheduleIdleFade() {
         mainHandler.removeCallbacks(idleFadeRunnable)
-        if (!expanded) {
+        // 等待挂起确认期间保持悬浮球全亮，提示点击已受理。
+        if (!expanded && !expandPending) {
             mainHandler.postDelayed(idleFadeRunnable, IDLE_DELAY_MS)
         }
     }
@@ -1272,6 +1343,7 @@ class OverlayWindowController(
         private const val KEY_STATUS_MODE = "status_mode"
         private const val IDLE_ALPHA = 0.62f
         private const val IDLE_DELAY_MS = 2400L
+        private const val EXPAND_CONFIRM_TIMEOUT_MS = 10_000L
         private const val TALKING_HOLD_MS = 2000L
         private const val MAX_LOG_LINES = 80
     }
