@@ -23,7 +23,8 @@ class PassthroughTouchClient(
     private val armedButtons = HashSet<String>()
 
     override fun padHold(x: Int, y: Int): Boolean = onMain {
-        val armed = overlay.prepareAreaPassthrough(x, y, x, y)
+        // PathExecutor 每帧重复按下摇杆；按住期间不重复登记穿透，padRelease 仅对应一次 restore。
+        val armed = if (holdArmed) false else overlay.prepareAreaPassthrough(x, y, x, y)
         val ok = delegate.padHold(x, y)
         if (armed) {
             if (ok) holdArmed = true else overlay.restoreClickPassthrough()
@@ -41,7 +42,8 @@ class PassthroughTouchClient(
     }
 
     override fun buttonDown(id: String, x: Int, y: Int): Boolean = onMain {
-        val armed = overlay.prepareAreaPassthrough(x, y, x, y)
+        // 同一按键重复按下时 armedButtons 已去重，穿透登记不随之叠加。
+        val armed = if (id in armedButtons) false else overlay.prepareAreaPassthrough(x, y, x, y)
         val ok = delegate.buttonDown(id, x, y)
         if (armed) {
             if (ok) armedButtons += id else overlay.restoreClickPassthrough()
@@ -57,7 +59,11 @@ class PassthroughTouchClient(
 
     override fun tap(x: Int, y: Int, durationMs: Long): Boolean {
         var armed = false
-        if (!onMain { armed = overlay.prepareAreaPassthrough(x, y, x, y); true }) return false
+        if (!onMain { armed = overlay.prepareAreaPassthrough(x, y, x, y); true }) {
+            // 超时/中断时 block 仍可能在主线程排队执行 prepare，补发一次 restore 避免计数泄漏。
+            main.post { overlay.restoreClickPassthrough() }
+            return false
+        }
         // WindowManager 的输入窗口更新异步生效；路线线程等待两帧，避免 DOWN 仍落到旧悬浮窗。
         if (armed && Looper.myLooper() != main.looper) {
             val ready = CountDownLatch(1)
@@ -86,7 +92,8 @@ class PassthroughTouchClient(
     override fun dragBegin(x: Int, y: Int): Boolean = onMain {
         lastDragX = x
         lastDragY = y
-        val armed = overlay.prepareAreaPassthrough(x, y, x, y)
+        // 上一段拖动未正常结束时 dragArmed 仍为真，不重复登记穿透。
+        val armed = if (dragArmed) false else overlay.prepareAreaPassthrough(x, y, x, y)
         val ok = delegate.dragBegin(x, y)
         if (armed) {
             if (ok) dragArmed = true else overlay.restoreClickPassthrough()

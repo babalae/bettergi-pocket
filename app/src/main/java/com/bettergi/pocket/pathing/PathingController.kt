@@ -1,6 +1,8 @@
 package com.bettergi.pocket.pathing
 
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import com.bettergi.pocket.input.InputAccessibilityService
 import com.bettergi.pocket.pathing.executor.LocationReadout
 import com.bettergi.pocket.pathing.executor.LocationReadoutChecks
@@ -49,6 +51,7 @@ class PathingController(
     private val lock = Any()
     private var runtime: PathingRuntime? = null
     private var worker: Thread? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private var job = Job.None
     private var routeAfterReadout = false
@@ -105,6 +108,25 @@ class PathingController(
             routeAfterReadout = false
             stopLocked()
         }
+    }
+
+    /**
+     * 悬浮窗面板要展开时先挂起注入，避免模拟手势的穿透隐藏刚展开的面板。
+     * [onQuiesced] 在主线程回调，此时无手势注入、无穿透窗口，展开安全；
+     * 未在执行路线（含只读定位模式）时立即回调。
+     */
+    fun requestOverlayPause(onQuiesced: () -> Unit) {
+        val current = synchronized(lock) { if (job == Job.Route) runtime else null }
+        if (current == null) {
+            onQuiesced()
+            return
+        }
+        current.requestPause { mainHandler.post(onQuiesced) }
+    }
+
+    /** 面板收起后恢复注入。未挂起时无操作。 */
+    fun resumeOverlay() {
+        synchronized(lock) { runtime }?.resume()
     }
 
     private fun startReadoutLocked() {
@@ -303,6 +325,8 @@ class PathingController(
                     outcome = TouchReleaseException().message
                     log(outcome ?: "触点释放未确认")
                 }
+                // 引擎已退出、触点已释放，若仍有等待静默确认的展开请求，此时回调是安全的。
+                runtime.notifyQuiescedOnExit()
                 Navigation.release()
                 TaskGate.exclusiveRunning = false
                 job = Job.None

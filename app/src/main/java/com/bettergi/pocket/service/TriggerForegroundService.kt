@@ -175,6 +175,8 @@ class TriggerForegroundService : Service() {
         }
         overlayController.onPathingOpen = { pathingWindow.show() }
         overlayController.onPathingStop = { pathingController.stop() }
+        overlayController.onRoutePauseRequest = { onQuiesced -> pathingController.requestOverlayPause(onQuiesced) }
+        overlayController.onRouteResume = { pathingController.resumeOverlay() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
